@@ -35,11 +35,14 @@ ALLOW=(
   ':(exclude)tools/'
 )
 
-# Only tracked files, so build artefacts and vendored caches cannot fail the gate.
-hits=$(git grep -I -n -E "$PATTERN" -- . "${ALLOW[@]}" 2>/dev/null || true)
+# Tracked files plus untracked-but-not-ignored ones, so build artefacts and
+# vendored caches cannot fail the gate while a file being written right now
+# still cannot slip past it: a new file is untracked for exactly as long as it
+# takes to write, which is when the gate has to see it.
+hits=$(git grep -I -n --untracked -E "$PATTERN" -- . "${ALLOW[@]}" 2>/dev/null || true)
 
 # Path names carry the brand too, and git grep only searches contents.
-path_hits=$(git ls-files | grep -E "$PATTERN" || true)
+path_hits=$(git ls-files --cached --others --exclude-standard | grep -E "$PATTERN" || true)
 
 status=0
 if [ -n "$hits" ]; then
