@@ -114,11 +114,10 @@ pub(crate) fn peek_access_token_principal(
         #[serde(default)]
         team_id: Option<String>,
     }
-    let token_data =
-        {
-            crate::auth::jwt::ensure_crypto_provider();
-            jsonwebtoken::dangerous::insecure_decode::<MinimalClaims>(access_token).ok()?
-        };
+    let token_data = {
+        crate::auth::jwt::ensure_crypto_provider();
+        jsonwebtoken::dangerous::insecure_decode::<MinimalClaims>(access_token).ok()?
+    };
     let pt = token_data.claims.principal_type?;
     let pid = token_data.claims.principal_id?;
     if pt.is_empty() || pid.is_empty() {

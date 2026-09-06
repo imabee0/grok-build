@@ -402,10 +402,8 @@ pub(crate) fn test_rebuild_spec_default() -> Arc<AgentRebuildSpec> {
         // `resources_state.json` beside this path, so a shared temp location
         // would let one run inherit another's tool state.
         bridge_state_path: {
-            let dir = std::env::temp_dir().join(format!(
-                "bcode-test-rebuild-{}",
-                std::process::id()
-            ));
+            let dir =
+                std::env::temp_dir().join(format!("bcode-test-rebuild-{}", std::process::id()));
             std::fs::create_dir_all(&dir).expect("test state dir");
             dir.join("tool_state.json")
         },
