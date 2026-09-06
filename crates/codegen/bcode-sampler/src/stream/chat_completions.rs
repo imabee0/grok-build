@@ -724,6 +724,8 @@ mod tests {
             completion_tokens: 50,
             total_tokens: 150,
             prompt_tokens_details: None,
+            prompt_cache_hit_tokens: None,
+            prompt_cache_miss_tokens: None,
             completion_tokens_details: None,
             cost_in_usd_ticks: None,
         });
@@ -763,6 +765,8 @@ mod tests {
                 completion_tokens: 5,
                 total_tokens: 15,
                 prompt_tokens_details: None,
+                prompt_cache_hit_tokens: None,
+                prompt_cache_miss_tokens: None,
                 completion_tokens_details: None,
                 cost_in_usd_ticks: wire,
             });
@@ -796,6 +800,8 @@ mod tests {
             completion_tokens: 5,
             total_tokens: 15,
             prompt_tokens_details: None,
+            prompt_cache_hit_tokens: None,
+            prompt_cache_miss_tokens: None,
             completion_tokens_details: None,
             cost_in_usd_ticks: Some(99),
         });
@@ -805,6 +811,8 @@ mod tests {
             completion_tokens: 6,
             total_tokens: 18,
             prompt_tokens_details: None,
+            prompt_cache_hit_tokens: None,
+            prompt_cache_miss_tokens: None,
             completion_tokens_details: None,
             cost_in_usd_ticks: Some(0),
         });

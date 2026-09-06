@@ -224,7 +224,7 @@ mod tests {
         // Declared-and-absent, not unknown.
         assert_eq!(caps.state("vercel.cli"), Some(false));
         assert!(!caps.has("vercel.cli"));
-        assert_eq!(caps.wire(), ["capabilities.v1", "bcode-files.occ"]);
+        assert_eq!(caps.wire(), ["bcode-files.occ", "capabilities.v1"]);
     }
 
     #[test]

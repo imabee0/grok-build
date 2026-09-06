@@ -1417,7 +1417,14 @@ async fn ensure_binding_forks_conv_branch_off_base_and_is_idempotent() {
             .await
             .unwrap()
     );
-    assert_eq!(Some(main_sha.clone()), res.head_sha);
+    // A fresh fork into a repo with no `.gitignore` seeds and commits one, so
+    // HEAD sits one commit above the base rather than on it.
+    assert_eq!(
+        Some(main_sha.clone()),
+        git_cli(&work, &["rev-parse", "HEAD~1"]).await.ok(),
+        "the conversation branch must fork off the base"
+    );
+    assert!(res.head_sha.is_some());
     std::fs::write(work.join("f.txt"), "x").unwrap();
     git_cli(&work, &["add", "-A"]).await.unwrap();
     git_cli(&work, &["commit", "-m", "conv work"])
