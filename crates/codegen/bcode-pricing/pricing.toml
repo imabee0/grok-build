@@ -1,0 +1,80 @@
+# Built-in rate card. USD per 1,000,000 tokens.
+# Override any model with a [pricing."<model-id>"] block in ~/.bcode/config.toml.
+#
+# Model ids are QUOTED. An unquoted [pricing.gpt-5.2-codex] is a dotted TOML key
+# and silently becomes pricing.gpt-5."2-codex", which parses fine and prices
+# nothing.
+#
+# Locally computed cost is an ESTIMATE. A provider that reports its own price
+# always wins; this table only fills the gap for those that do not.
+#
+# DeepSeek verified against api-docs.deepseek.com (2026-09-06): peak is
+# 01:00-04:00 and 06:00-10:00 UTC Monday-Friday, and off-peak is exactly half.
+# The base card is therefore OFF-PEAK with peak expressed as multiplier = 2.0.
+# Stating it that way keeps both peak blocks inside a single day: the equivalent
+# off-peak windows would wrap midnight, and a wrapping window that carries a
+# weekday filter mishandles Monday 00:00-01:00, which is off-peak but whose
+# window began on Sunday.
+
+[pricing."deepseek-v4-pro"]
+input = 0.66          # cache miss, off-peak
+output = 1.98
+cache_read = 0.022
+
+[[pricing."deepseek-v4-pro".window]]
+start = "01:00"
+end = "04:00"
+days = ["mon", "tue", "wed", "thu", "fri"]
+multiplier = 2.0
+
+[[pricing."deepseek-v4-pro".window]]
+start = "06:00"
+end = "10:00"
+days = ["mon", "tue", "wed", "thu", "fri"]
+multiplier = 2.0
+
+[pricing."deepseek-v4-flash"]
+input = 0.22
+output = 0.66
+cache_read = 0.007
+
+[[pricing."deepseek-v4-flash".window]]
+start = "01:00"
+end = "04:00"
+days = ["mon", "tue", "wed", "thu", "fri"]
+multiplier = 2.0
+
+[[pricing."deepseek-v4-flash".window]]
+start = "06:00"
+end = "10:00"
+days = ["mon", "tue", "wed", "thu", "fri"]
+multiplier = 2.0
+
+[pricing."deepseek-v4-flash-vision-exp"]
+input = 0.22
+output = 0.66
+cache_read = 0.007
+
+[[pricing."deepseek-v4-flash-vision-exp".window]]
+start = "01:00"
+end = "04:00"
+days = ["mon", "tue", "wed", "thu", "fri"]
+multiplier = 2.0
+
+[[pricing."deepseek-v4-flash-vision-exp".window]]
+start = "06:00"
+end = "10:00"
+days = ["mon", "tue", "wed", "thu", "fri"]
+multiplier = 2.0
+
+# No published time-of-use pricing. These figures are INDICATIVE and were not
+# verified against a live price list -- confirm before trusting a number.
+[pricing."gpt-5.2-codex"]
+input = 1.25
+output = 10.0
+cache_read = 0.125
+
+[pricing."grok-4.6"]
+input = 3.0
+output = 15.0
+cache_read = 0.75

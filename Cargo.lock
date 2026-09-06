@@ -2311,6 +2311,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bcode-pricing"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "toml",
+ "tracing",
+]
+
+[[package]]
 name = "bcode-prompt-queue"
 version = "0.1.0"
 dependencies = [

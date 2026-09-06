@@ -50,6 +50,7 @@ members = [
     "crates/codegen/bcode-pager-render",
     "crates/codegen/bcode-paths",
     "crates/codegen/bcode-plugin-marketplace",
+    "crates/codegen/bcode-pricing",
     "crates/codegen/bcode-sampler",
     "crates/codegen/bcode-sampling-types",
     "crates/codegen/bcode-sandbox",
