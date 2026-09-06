@@ -533,6 +533,15 @@ pub struct Usage {
     pub prompt_tokens_details: Option<PromptTokensDetails>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub completion_tokens_details: Option<CompletionTokensDetails>,
+    /// DeepSeek reports prompt caching with two top-level fields instead of
+    /// `prompt_tokens_details.cached_tokens`, and ships no `prompt_tokens_details`
+    /// at all. Documented invariant: `prompt_tokens == hit + miss`.
+    /// Without these the cache split reads zero on DeepSeek and every cached
+    /// token is billed at the full input rate -- the bug opencode still has.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt_cache_hit_tokens: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt_cache_miss_tokens: Option<u32>,
     /// bcode extension: request price in USD ticks (1 USD = 1e10 ticks).
     /// The REST mapper backfills `0` for unbilled requests; capture sites normalize `0` to "unreported" (see `stream/chat_completions.rs`).
     #[serde(default, skip_serializing_if = "Option::is_none")]

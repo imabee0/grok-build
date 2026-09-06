@@ -810,12 +810,75 @@ impl TokenUsage {
     }
 }
 
+#[cfg(test)]
+mod deepseek_cache_mapping_tests {
+    use super::*;
+    use crate::types::{PromptTokensDetails, Usage};
+
+    fn usage(prompt: u32, details: Option<u32>, hit: Option<u32>, miss: Option<u32>) -> Usage {
+        Usage {
+            prompt_tokens: prompt,
+            completion_tokens: 10,
+            total_tokens: prompt + 10,
+            prompt_tokens_details: details.map(|cached_tokens| PromptTokensDetails {
+                cached_tokens,
+                ..Default::default()
+            }),
+            completion_tokens_details: None,
+            prompt_cache_hit_tokens: hit,
+            prompt_cache_miss_tokens: miss,
+            cost_in_usd_ticks: None,
+        }
+    }
+
+    /// DeepSeek ships no `prompt_tokens_details`; without the top-level fallback
+    /// the cache split reads zero and every cached token is billed at the full
+    /// input rate.
+    #[test]
+    fn deepseek_top_level_cache_hit_is_read() {
+        let u: TokenUsage = usage(1000, None, Some(800), Some(200)).into();
+        assert_eq!(u.cached_prompt_tokens, 800);
+        assert_eq!(u.prompt_tokens, 1000, "prompt_tokens stays inclusive");
+    }
+
+    /// DeepSeek documents `prompt_tokens == hit + miss`, so billable input is the
+    /// miss count. The pricing layer derives it by subtraction; assert the inputs
+    /// it relies on agree.
+    #[test]
+    fn deepseek_hit_plus_miss_equals_prompt_tokens() {
+        let raw = usage(1000, None, Some(800), Some(200));
+        assert_eq!(
+            raw.prompt_cache_hit_tokens.unwrap() + raw.prompt_cache_miss_tokens.unwrap(),
+            raw.prompt_tokens
+        );
+        let u: TokenUsage = raw.into();
+        assert_eq!(u.prompt_tokens - u.cached_prompt_tokens, 200);
+    }
+
+    #[test]
+    fn openai_nested_details_still_win() {
+        let u: TokenUsage = usage(1000, Some(500), Some(999), None).into();
+        assert_eq!(u.cached_prompt_tokens, 500);
+    }
+
+    #[test]
+    fn absent_everywhere_is_zero_not_a_panic() {
+        let u: TokenUsage = usage(1000, None, None, None).into();
+        assert_eq!(u.cached_prompt_tokens, 0);
+    }
+}
+
 impl From<Usage> for TokenUsage {
     fn from(u: Usage) -> Self {
+        // OpenAI-shaped providers nest the cache-hit count; DeepSeek reports it
+        // top-level and omits `prompt_tokens_details` entirely. Prefer the nested
+        // field, fall back to DeepSeek's, so both are priced correctly.
         let cached_prompt_tokens = u
             .prompt_tokens_details
             .as_ref()
-            .map_or(0, |d| d.cached_tokens);
+            .map(|d| d.cached_tokens)
+            .or(u.prompt_cache_hit_tokens)
+            .unwrap_or(0);
         Self {
             prompt_tokens: u.prompt_tokens,
             completion_tokens: u.completion_tokens,
