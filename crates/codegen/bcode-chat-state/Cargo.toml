@@ -9,6 +9,8 @@ description = "Actor-based chat state management for bcode agents"
 default-bazel = []
 
 [dependencies]
+bcode-pricing = { path = "../bcode-pricing" }
+chrono = { workspace = true }
 indexmap = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

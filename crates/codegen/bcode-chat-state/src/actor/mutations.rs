@@ -522,6 +522,22 @@ impl ChatStateActor {
             _ => self.state.sampling_config.model.as_str(),
         }
         .to_owned();
+        // Providers that report a price win outright. For everyone else, price
+        // the call locally at the rate in force NOW -- not at display time, and
+        // not once per ledger, so both ledgers agree on the same figure.
+        let cost_usd_ticks = cost_usd_ticks.or_else(|| {
+            self.state.pricing.cost_ticks(
+                &model_key,
+                bcode_pricing::CallTokens {
+                    input_tokens: u64::from(usage.prompt_tokens),
+                    output_tokens: u64::from(usage.completion_tokens),
+                    cache_read_tokens: u64::from(usage.cached_prompt_tokens),
+                    cache_write_tokens: u64::from(usage.cache_creation_prompt_tokens),
+                    reasoning_tokens: u64::from(usage.reasoning_tokens),
+                },
+                chrono::Utc::now(),
+            )
+        });
         self.state
             .prompt_usage
             .get_or_insert_default()

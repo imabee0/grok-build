@@ -97,7 +97,14 @@ pub(crate) fn test_app() -> AppView {
         models: ModelState::default(),
         registry: ActionRegistry::defaults(),
         settings_registry: std::sync::Arc::new(crate::settings::SettingsRegistry::defaults()),
-        current_ui: bcode_shell::agent::config::UiConfig::default(),
+        current_ui: {
+            // These tests pin view animation, so the row is off here: it is on
+            // by default, and an unsettled row would demand ticks of its own.
+            // `status_line_policy` covers the default-on row.
+            let mut ui = bcode_shell::agent::config::UiConfig::default();
+            ui.status_line = bcode_status_line::StatusLineConfig::disabled();
+            ui
+        },
         status_line: Default::default(),
         cwd: std::path::PathBuf::from("/tmp"),
         cwd_has_git_ancestor: false,

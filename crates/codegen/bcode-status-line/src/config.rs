@@ -146,6 +146,9 @@ impl StatusLineConfig {
         StatusLineItem::Cwd,
         StatusLineItem::Model,
         StatusLineItem::Context,
+        StatusLineItem::Tokens,
+        StatusLineItem::Cache,
+        StatusLineItem::Cost,
     ];
 
     pub const MIN_REFRESH_INTERVAL_SECS: u64 = 1;
@@ -154,6 +157,17 @@ impl StatusLineConfig {
     pub const MAX_REFRESH_INTERVAL_SECS: u64 = 86_400;
 
     const MAX_PADDING_PER_SIDE: u16 = 16;
+
+    /// An explicitly disabled row, as `type = "disabled"` would parse to.
+    ///
+    /// Unconfigured means *on* here, so a caller that wants no row — a test
+    /// pinning some other behaviour, most of all — has to say so.
+    pub fn disabled() -> Self {
+        Self {
+            kind: Some(StatusLineType::Disabled),
+            ..Self::default()
+        }
+    }
 
     pub fn declared_kind(&self) -> Option<StatusLineType> {
         self.kind
@@ -167,8 +181,31 @@ impl StatusLineConfig {
         &self.unknown_keys
     }
 
+    /// True when the user wrote nothing at all about the status line.
+    ///
+    /// Distinct from "wrote a section but omitted `type`": a section carrying a
+    /// command, items, or even an unrecognised key is a deliberate statement,
+    /// and must keep meaning what it meant before -- an unknown key in
+    /// particular must not switch on a row nobody asked for.
+    fn is_unconfigured(&self) -> bool {
+        self.kind.is_none()
+            && self.command.is_none()
+            && self.items.is_none()
+            && self.padding.is_none()
+            && self.refresh_interval.is_none()
+            && self.parse_problem.is_none()
+            && self.unknown_keys.is_empty()
+    }
+
     fn effective_kind(&self) -> StatusLineType {
-        self.kind.unwrap_or_default()
+        match self.kind {
+            Some(kind) => kind,
+            // Unconfigured means on: session cost and token usage are worth
+            // seeing without opting in, and every figure the row shows is
+            // already being tracked whether or not it is displayed.
+            None if self.is_unconfigured() => StatusLineType::Builtin,
+            None => StatusLineType::default(),
+        }
     }
 
     pub fn refresh_interval(&self) -> Option<Duration> {
@@ -326,7 +363,12 @@ pub enum StatusLineItem {
     Cwd,
     Model,
     Context,
+    /// Session spend. Cents below a dollar, so a real cost never reads as $0.00.
     Cost,
+    /// Session tokens in and out.
+    Tokens,
+    /// Share of session input served from cache.
+    Cache,
     TurnTimer,
     SessionName,
 }
@@ -337,7 +379,13 @@ impl StatusLineItem {
     pub const fn varies_mid_turn(self) -> bool {
         match self {
             Self::TurnTimer => true,
-            Self::Cwd | Self::Model | Self::Context | Self::Cost | Self::SessionName => false,
+            Self::Cwd
+            | Self::Model
+            | Self::Context
+            | Self::Cost
+            | Self::Tokens
+            | Self::Cache
+            | Self::SessionName => false,
         }
     }
 

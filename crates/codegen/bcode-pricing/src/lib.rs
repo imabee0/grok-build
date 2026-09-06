@@ -84,13 +84,31 @@ pub struct Window {
     pub multiplier: Option<f64>,
 }
 
+/// A rate card that applies once a request's context passes a threshold.
+///
+/// Several providers charge more for large contexts. The threshold is measured
+/// on the *cache-inclusive* prompt size, because that is the context the
+/// provider actually had to serve.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ContextTier {
+    /// Applies when prompt tokens are >= this value.
+    pub over_tokens: u64,
+    #[serde(flatten)]
+    pub rates: Rates,
+}
+
 /// Base rates plus any time-of-use windows for one model.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ModelPricing {
     #[serde(flatten)]
     pub base: Rates,
+    /// Time-of-use windows, first match wins.
     #[serde(default)]
     pub window: Vec<Window>,
+    /// Context-size tiers. The highest threshold the request clears is used, so
+    /// order in the file does not matter.
+    #[serde(default)]
+    pub tier: Vec<ContextTier>,
 }
 
 /// The rate card in force, and the label to show for it.
@@ -177,32 +195,50 @@ impl Rates {
 }
 
 impl ModelPricing {
-    /// The rates in force at `at`. First matching window wins, so order is
-    /// significant and the most specific window belongs first.
+    /// The rates in force at `at` for a request of `prompt_tokens`.
+    ///
+    /// A context tier replaces the base card first; a time-of-use window then
+    /// applies on top. That order matters: providers publish tiers as absolute
+    /// rate cards and off-peak as a discount on whatever card applies, so
+    /// scaling the tier is right and tiering the discount is not.
+    pub fn rates_for(&self, prompt_tokens: u64, at: DateTime<Utc>) -> EffectiveRates {
+        let base = self
+            .tier
+            .iter()
+            .filter(|t| prompt_tokens >= t.over_tokens)
+            .max_by_key(|t| t.over_tokens)
+            .map_or(self.base, |t| t.rates);
+        self.rates_from(base, at)
+    }
+
+    /// Rates at `at` for a request small enough that no context tier applies.
     pub fn rates_at(&self, at: DateTime<Utc>) -> EffectiveRates {
+        self.rates_from(self.base, at)
+    }
+
+    fn rates_from(&self, base: Rates, at: DateTime<Utc>) -> EffectiveRates {
         for (i, w) in self.window.iter().enumerate() {
             if !w.contains(at) {
                 continue;
             }
             let rates = match (w.rates, w.multiplier) {
                 (Some(r), _) => r,
-                (None, Some(m)) => self.base.scaled(m),
-                (None, None) => self.base,
+                (None, Some(m)) => base.scaled(m),
+                (None, None) => base,
             };
             return EffectiveRates {
                 rates,
                 window: Some(i),
             };
         }
-        EffectiveRates {
-            rates: self.base,
-            window: None,
-        }
+        EffectiveRates { rates: base, window: None }
     }
 
-    /// Cost of one call in USD ticks, priced at the rate in force at `at`.
+    /// Cost of one call in USD ticks, priced at the rate in force when it was
+    /// made and at the tier its context size falls in.
     pub fn cost_ticks_at(&self, tokens: CallTokens, at: DateTime<Utc>) -> i64 {
-        cost_ticks(tokens, self.rates_at(at).rates)
+        let rates = self.rates_for(tokens.input_tokens, at).rates;
+        cost_ticks(tokens, rates)
     }
 }
 

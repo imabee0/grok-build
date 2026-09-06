@@ -3153,21 +3153,21 @@ mod tests {
 
         // Two headers and three rows make five entries
         assert_eq!(result.len(), 5);
-        // Groups are sorted alphabetically: fw-1 before bcode.
-        // Header positions: 0 (fw-1), 2 (bcode)
+        // Groups are sorted alphabetically: bcode (two rows) before fw-1 (one).
+        // Header positions: 0 (bcode), 3 (fw-1)
         assert_eq!(non_sel.len(), 5);
         assert!(non_sel[0], "first entry should be header (non-selectable)");
         assert!(!non_sel[1], "second entry should be selectable row");
-        assert!(non_sel[2], "third entry should be header (non-selectable)");
-        assert!(!non_sel[3], "fourth entry should be selectable row");
+        assert!(!non_sel[2], "third entry should be selectable row");
+        assert!(non_sel[3], "fourth entry should be header (non-selectable)");
         assert!(!non_sel[4], "fifth entry should be selectable row");
 
         // Verify headers
         assert!(
-            matches!(&result[0], crate::views::picker::PickerEntry::Header { label } if label == &"fw-1")
+            matches!(&result[0], crate::views::picker::PickerEntry::Header { label } if label == &"bcode")
         );
         assert!(
-            matches!(&result[2], crate::views::picker::PickerEntry::Header { label } if label == &"bcode")
+            matches!(&result[3], crate::views::picker::PickerEntry::Header { label } if label == &"fw-1")
         );
     }
 

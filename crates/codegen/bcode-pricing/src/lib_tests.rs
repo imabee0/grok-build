@@ -242,7 +242,6 @@ fn builtin_card_parses_and_ids_with_dots_survive() {
         "deepseek-v4-pro",
         "deepseek-v4-flash",
         "deepseek-v4-flash-vision-exp",
-        "gpt-5.2-codex",
         "grok-4.6",
     ] {
         assert!(
@@ -283,4 +282,105 @@ fn cents_below_a_dollar_dollars_above() {
     assert_eq!(format_ticks(4_320_000_000), "43.2\u{00A2}");
     assert_eq!(format_ticks(15_000_000_000), "$1.50");
     assert_eq!(format_ticks(0), "0.0\u{00A2}");
+}
+
+/// OpenAI is absent on purpose: their card has short/long context tiers whose
+/// boundary is undocumented, and guessing it would halve or double the bill on
+/// every long request. Unknown is the honest answer; this pins the decision so
+/// nobody "fixes" it later with a guess.
+#[test]
+fn openai_is_unpriced_rather_than_guessed() {
+    let t = PricingTable::builtin();
+    assert!(t.get("gpt-5.6-terra").is_none());
+    assert!(t.get("gpt-6-astra").is_none());
+}
+
+// --- context-size tiers ----------------------------------------------------
+
+#[test]
+fn xai_tier_doubles_past_200k() {
+    let t = PricingTable::builtin();
+    let p = t.get("grok-4.6").unwrap();
+    let small = p.rates_for(199_999, Utc::now()).rates;
+    let large = p.rates_for(200_000, Utc::now()).rates;
+    assert_eq!(small.input, 2.00);
+    assert_eq!(large.input, 4.00, "threshold is inclusive at 200k");
+    assert_eq!(large.output, 12.00);
+    assert_eq!(large.cache_read, Some(1.00));
+}
+
+#[test]
+fn the_tier_is_chosen_by_highest_threshold_cleared_not_file_order() {
+    let p: ModelPricing = toml::from_str(
+        r#"
+        input = 1.0
+        output = 1.0
+        [[tier]]
+        over_tokens = 1000000
+        input = 100.0
+        output = 100.0
+        [[tier]]
+        over_tokens = 1000
+        input = 10.0
+        output = 10.0
+        "#,
+    )
+    .unwrap();
+    assert_eq!(p.rates_for(500, Utc::now()).rates.input, 1.0);
+    assert_eq!(p.rates_for(5_000, Utc::now()).rates.input, 10.0);
+    assert_eq!(p.rates_for(5_000_000, Utc::now()).rates.input, 100.0);
+}
+
+#[test]
+fn a_time_window_discounts_the_tier_it_applies_to() {
+    // Providers publish tiers as absolute cards and off-peak as a discount on
+    // whichever card applies. Tier first, then window -- not the reverse.
+    let p: ModelPricing = toml::from_str(
+        r#"
+        input = 10.0
+        output = 10.0
+        [[tier]]
+        over_tokens = 1000
+        input = 20.0
+        output = 20.0
+        [[window]]
+        start = "00:00"
+        end = "24:00"
+        multiplier = 0.5
+        "#,
+    )
+    .unwrap();
+    assert_eq!(
+        p.rates_for(100, Utc::now()).rates.input,
+        5.0,
+        "base, discounted"
+    );
+    assert_eq!(
+        p.rates_for(5_000, Utc::now()).rates.input,
+        10.0,
+        "tier, discounted"
+    );
+}
+
+#[test]
+fn tier_threshold_uses_the_cache_inclusive_prompt_size() {
+    // The provider served the whole context, cached or not, so the tier is
+    // chosen on the full prompt rather than on the billable remainder.
+    let t = PricingTable::builtin();
+    let p = t.get("grok-4.6").unwrap();
+    let tokens = CallTokens {
+        input_tokens: 250_000,
+        cache_read_tokens: 240_000, // billable input is only 10k
+        ..Default::default()
+    };
+    let charged = p.cost_ticks_at(tokens, Utc::now());
+    assert_eq!(
+        charged,
+        cost_ticks(tokens, p.rates_for(250_000, Utc::now()).rates)
+    );
+    assert_ne!(
+        charged,
+        cost_ticks(tokens, p.base),
+        "a heavily cached large request must still price at the large-context tier"
+    );
 }

@@ -1,6 +1,6 @@
 # Status Line
 
-An optional row at the bottom of the pager — above the shortcuts bar in the full screen, under the prompt's info row in minimal mode — and disabled by default. It shows live session context, such as the model, context-window usage, cost, directory, and git worktree, or the output of any script you configure. Opt in with `[ui.status_line]` in `~/.bcode/config.toml`.
+A row at the bottom of the pager — above the shortcuts bar in the full screen, under the prompt's info row in minimal mode — shown unless you turn it off. It reports live session context: the model, context-window usage, tokens, cache share, cost, directory and git worktree, or the output of any script you configure. Configure it under `[ui.status_line]` in `~/.bcode/config.toml`.
 
 ## Set up
 
@@ -9,17 +9,19 @@ An optional row at the bottom of the pager — above the shortcuts bar in the fu
 ```toml
 [ui.status_line]
 type = "builtin"
-items = ["cwd", "model", "context"]   # default when omitted
+items = ["cwd", "model", "context", "tokens", "cache", "cost"]   # default when omitted
 ```
 
-This renders, for example, `bcode-shell-status-line │ Bcode 4.5 │ 12% ctx`. Items appear in the order you list them, and long ones are elided with `…`: the directory and session name at 40 columns, the model at 30.
+This renders, for example, `bcode │ DeepSeek V4 Pro │ 12% ctx │ 24k↑ 3.1k↓ │ 86% cached │ 4.2¢`. Items appear in the order you list them, and long ones are elided with `…`: the directory and session name at 40 columns, the model at 30.
 
 | Item | Shows |
 | --- | --- |
 | `cwd` | Current directory (basename) |
 | `model` | Model display name |
 | `context` | Context-window percent, amber at the auto-compaction threshold or at 80% when the agent reports none |
-| `cost` | Session cost, hidden below $0.005 so it never shows a misleading `$0.00` |
+| `tokens` | Session tokens, input then output (`24k↑ 3.1k↓`). Counts are truncated, never rounded up, so the row never claims tokens you did not spend. Absent before the first call |
+| `cache` | Share of session input tokens served from cache (`86% cached`), counting cache reads against all input. Absent before the first call |
+| `cost` | Session cost, in cents below a dollar (`4.2¢`) and dollars above. Hidden below a tenth of a cent so it never shows a misleading zero, and absent entirely when no price is known for the model — unknown and free look different |
 | `turn-timer` | Elapsed time of the running turn, from one second in |
 | `session-name` | Session name, when set |
 
@@ -37,14 +39,14 @@ Field names and nesting follow the common status line convention, so a ported sc
 
 ### Disabled
 
-`type = "disabled"`, the default, shows nothing; `off`, `none`, and `hidden` are accepted as spellings of `disabled`.
+`type = "disabled"` shows nothing; `off`, `none`, and `hidden` are accepted as spellings of `disabled`. This is the only way to take the row away: leaving `[ui.status_line]` out entirely gives you the built-in row above.
 
 ### Options
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| `type` | string | `disabled` | `builtin`, `command`, or `disabled`. |
-| `items` | array | `["cwd", "model", "context"]` | Built-in segments, in order. |
+| `type` | string | `builtin` | `builtin`, `command`, or `disabled`. Omitting the whole `[ui.status_line]` section gives `builtin`; writing the section but not this key gives `disabled`, so a section that only sets `command` needs `type` too. |
+| `items` | array | `["cwd", "model", "context", "tokens", "cache", "cost"]` | Built-in segments, in order. |
 | `command` | string | none | Script for `type = "command"`. |
 | `padding` | integer | `0` | Horizontal spacing, in characters per side, capped at 16. A padding wide enough to leave no columns reserves the row but paints nothing in it. |
 | `refresh_interval` | integer | unset | `command` rows only, in seconds, 1 to 86,400. Re-runs the script this often even when nothing changed, so an idle session can still surface a change — an incident page, a CI status. Unset keeps the row event-driven. The run it schedules carries `"trigger": "refresh_interval"`, and its failures keep the last output rather than painting an error (see [Refresh runs](#refresh-runs)). A script that calls a network should prefer a longer interval and read a cache on `state` runs. |

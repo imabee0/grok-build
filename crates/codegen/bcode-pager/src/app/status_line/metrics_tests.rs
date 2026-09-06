@@ -12,12 +12,26 @@ fn command_row() -> StatusLineConfig {
 fn session_reports_its_config_once() {
     let metrics = StatusLineMetrics::new();
 
-    // A config with no `type` key reports `unset`, not `disabled`
+    // A config with no `type` key reports `unset`, not `builtin`: what is
+    // reported is what the user wrote, and they wrote nothing. It still draws,
+    // because unconfigured means on.
     metrics.report_config(&StatusLineConfig::default());
     metrics.report_config(&command_row());
 
     assert_eq!(metrics.kind.get().copied(), Some("unset"));
-    // The flag that gates health reporting cannot move on the second call either
+    assert!(metrics.draws_a_row.load(Ordering::Relaxed));
+}
+
+/// The second call cannot move either field, so a row switched off stays off in
+/// the telemetry no matter what a later config says.
+#[test]
+fn a_row_turned_off_never_arms_health_reporting() {
+    let metrics = StatusLineMetrics::new();
+
+    metrics.report_config(&StatusLineConfig::disabled());
+    metrics.report_config(&command_row());
+
+    assert_eq!(metrics.kind.get().copied(), Some("disabled"));
     assert!(!metrics.draws_a_row.load(Ordering::Relaxed));
 }
 
@@ -57,9 +71,9 @@ fn only_a_builtin_row_reports_the_items_it_drew() {
 #[test]
 fn row_the_client_cannot_draw_reports_adoption_but_not_health() {
     let metrics = StatusLineMetrics::new();
-    metrics.report_config(&StatusLineConfig::default());
+    metrics.report_config(&StatusLineConfig::disabled());
     metrics.note_content();
 
-    assert_eq!(metrics.kind.get().copied(), Some("unset"));
+    assert_eq!(metrics.kind.get().copied(), Some("disabled"));
     assert!(metrics.health_event().is_none());
 }

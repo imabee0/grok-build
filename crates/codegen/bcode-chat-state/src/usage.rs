@@ -154,6 +154,52 @@ impl UsageLedger {
 
 #[cfg(test)]
 mod tests {
+    use bcode_pricing::{CallTokens, PricingTable};
+
+    /// The end of the pricing chain: a provider that reports no price must still
+    /// produce a cost, and it must be the same number the rate card gives.
+    /// Without this, cost silently reads "unknown" for every DeepSeek session.
+    #[test]
+    fn a_provider_that_reports_no_price_is_priced_locally() {
+        let table = PricingTable::builtin();
+        let tokens = CallTokens {
+            input_tokens: 100_000,
+            output_tokens: 2_000,
+            cache_read_tokens: 90_000,
+            ..Default::default()
+        };
+        // A Saturday: DeepSeek off-peak, so no window ambiguity in the fixture.
+        let at = chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2026, 9, 12, 12, 0, 0).unwrap();
+        let ticks = table
+            .cost_ticks("deepseek-v4-pro", tokens, at)
+            .expect("deepseek-v4-pro is in the built-in card");
+
+        // 10k uncached input @ $0.66/1M + 90k cached @ $0.022/1M + 2k output @ $1.98/1M
+        let expected = 66_000_000 + 19_800_000 + 39_600_000;
+        assert_eq!(ticks, expected, "{}", bcode_pricing::format_ticks(ticks));
+        assert!(ticks > 0, "a real call must not price as free");
+    }
+
+    /// Guards the direction of the DeepSeek cache fix: the same call priced with
+    /// the cache split ignored costs strictly more.
+    #[test]
+    fn ignoring_the_cache_split_overstates_cost() {
+        let table = PricingTable::builtin();
+        let with_cache = CallTokens {
+            input_tokens: 100_000,
+            cache_read_tokens: 90_000,
+            ..Default::default()
+        };
+        let without = CallTokens {
+            input_tokens: 100_000,
+            ..Default::default()
+        };
+        let at = chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2026, 9, 12, 12, 0, 0).unwrap();
+        let a = table.cost_ticks("deepseek-v4-pro", with_cache, at).unwrap();
+        let b = table.cost_ticks("deepseek-v4-pro", without, at).unwrap();
+        assert!(b > a, "cache-blind pricing ({b}) must exceed cache-aware ({a})");
+    }
+
     use super::*;
 
     fn tu(prompt: u32, completion: u32) -> TokenUsage {

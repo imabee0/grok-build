@@ -29,13 +29,13 @@ fn scanner_strips_escapes_and_records_link_columns() {
             "a bel-terminated link after plain text",
             "[Bcode] \x1b]8;;https://example.com/repo\x07repo\x1b]8;;\x07",
             "[Bcode] repo",
-            &[(7, 11, "https://example.com/repo")],
+            &[(8, 12, "https://example.com/repo")],
         ),
         (
             "an st-terminated link whose colour paints no columns",
             "\x1b]8;;https://bcode.invalid\x1b\\\x1b[32mbcode.invalid\x1b[0m\x1b]8;;\x1b\\",
             "\x1b[32mbcode.invalid\x1b[0m",
-            &[(0, 4, "https://bcode.invalid")],
+            &[(0, 13, "https://bcode.invalid")],
         ),
         (
             "two links on one line",
@@ -54,7 +54,7 @@ fn scanner_strips_escapes_and_records_link_columns() {
             "a charset escape is swallowed and takes no columns",
             "\x1b(B\x1b]8;;https://bcode.invalid\x07bcode.invalid\x1b]8;;\x07",
             "bcode.invalid",
-            &[(0, 4, "https://bcode.invalid")],
+            &[(0, 13, "https://bcode.invalid")],
         ),
         (
             "an erase csi never reaches the parser, the colour does",
@@ -92,7 +92,7 @@ fn link_on_the_second_line_is_measured_from_that_line() {
     // Column 4 of the second line, not column 10 of the whole text.
     assert_eq!(
         (link.line, link.col_start, link.col_end, &*link.url),
-        (1, 4, 8, "https://bcode.invalid")
+        (1, 4, 17, "https://bcode.invalid")
     );
 }
 

@@ -138,6 +138,9 @@ pub(crate) struct ChatState {
     pub conversation: Vec<ConversationItem>,
     /// Current sampling configuration (model, context window, etc.).
     pub sampling_config: SamplingConfig,
+    /// Rate card used when a provider does not report the price of a call.
+    /// Defaults to the embedded card; `set_pricing` overlays user config.
+    pub pricing: bcode_pricing::PricingTable,
     /// Current prompt index (incremented per user turn).
     pub prompt_index: usize,
     /// Cached prompt texts for rewind preview.
@@ -247,6 +250,7 @@ impl ChatState {
         Self {
             conversation,
             sampling_config,
+            pricing: bcode_pricing::PricingTable::builtin(),
             prompt_index: 0,
             prompt_texts: Vec::new(),
             total_tokens: initial_tokens,

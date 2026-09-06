@@ -15,7 +15,10 @@ const CWD_COLS: usize = 40;
 const MODEL_COLS: usize = 30;
 const SESSION_NAME_COLS: usize = 40;
 
-const MIN_DISPLAYED_COST_USD: f64 = 0.005;
+/// The smallest spend the row can paint truthfully: a tenth of a cent, the
+/// resolution of the cents format below. Anything under it would render
+/// `0.0\u{00A2}`, which reads as free.
+const MIN_DISPLAYED_COST_USD: f64 = 0.0005;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SegmentTone {
@@ -63,6 +66,30 @@ impl StatusSegment {
     }
 }
 
+
+/// Token counts get large fast, so render them the way a human reads them.
+/// Truncates rather than rounds: 1999 is "1.9k", never "2.0k", so the figure
+/// never claims more tokens than were actually used.
+fn compact_count(n: u64) -> String {
+    match n {
+        0..=999 => n.to_string(),
+        1_000..=999_999 => {
+            let whole = n / 1_000;
+            let tenth = (n % 1_000) / 100;
+            if whole < 10 {
+                format!("{whole}.{tenth}k")
+            } else {
+                format!("{whole}k")
+            }
+        }
+        _ => {
+            let whole = n / 1_000_000;
+            let tenth = (n % 1_000_000) / 100_000;
+            format!("{whole}.{tenth}M")
+        }
+    }
+}
+
 #[must_use]
 pub fn compose_builtin(
     ctx: &StatusLineContext,
@@ -101,7 +128,44 @@ pub fn compose_builtin(
                 .cost
                 .total_cost_usd
                 .filter(|usd| *usd >= MIN_DISPLAYED_COST_USD)
-                .map(|usd| StatusSegment::dim(format!("${usd:.2}"))),
+                // Cents below a dollar: a coding session often costs a few
+                // cents, and "$0.00" reads as free rather than as small.
+                .map(|usd| {
+                    StatusSegment::dim(if usd < 1.0 {
+                        format!("{:.1}\u{00A2}", usd * 100.0)
+                    } else {
+                        format!("${usd:.2}")
+                    })
+                }),
+            StatusLineItem::Tokens => {
+                let u = ctx.context_window.session_usage.as_ref()?;
+                let input = u
+                    .input_tokens
+                    .saturating_add(u.cache_creation_input_tokens)
+                    .saturating_add(u.cache_read_input_tokens);
+                if input == 0 && u.output_tokens == 0 {
+                    return None;
+                }
+                Some(StatusSegment::dim(format!(
+                    "{}\u{2191} {}\u{2193}",
+                    compact_count(input),
+                    compact_count(u.output_tokens)
+                )))
+            }
+            StatusLineItem::Cache => {
+                let u = ctx.context_window.session_usage.as_ref()?;
+                let input = u
+                    .input_tokens
+                    .saturating_add(u.cache_creation_input_tokens)
+                    .saturating_add(u.cache_read_input_tokens);
+                if input == 0 {
+                    return None;
+                }
+                // Integer maths: the ratio is a display figure, and a f64 round
+                // trip here can render 100% for a session that missed a token.
+                let pct = u.cache_read_input_tokens.saturating_mul(100) / input;
+                Some(StatusSegment::dim(format!("{pct}% cached")))
+            }
             StatusLineItem::TurnTimer => {
                 let secs = turn_elapsed?.as_secs();
                 let text = match secs {

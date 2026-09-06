@@ -188,7 +188,18 @@ fn mode_without_its_payload_draws_the_problem_instead() {
         .into_config();
     assert!(ok.reserves_a_row() && ok.problem().is_none());
 
-    let off = StatusLineConfig::default();
+    // An unconfigured status line now draws the built-in row rather than
+    // nothing: the cost and token figures it shows are tracked either way, so
+    // hiding them by default only made them harder to find.
+    let unconfigured = StatusLineConfig::default();
+    assert!(unconfigured.reserves_a_row() && unconfigured.problem().is_none());
+    assert!(matches!(
+        unconfigured.resolve(),
+        Some(ResolvedStatusLine::Builtin { .. })
+    ));
+
+    // Turning it off explicitly still turns it off.
+    let off = StatusLineConfigFixture::from_kind(StatusLineType::Disabled).into_config();
     assert!(!off.reserves_a_row() && off.problem().is_none());
 }
 

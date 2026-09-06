@@ -860,10 +860,10 @@
     #[test]
     fn a_status_snapshot_does_not_repaint_a_client_with_no_status_line() {
         let mut app = make_app_with_agent("sess-1");
-        assert!(
-            !app.current_ui.status_line.reserves_a_row(),
-            "disabled is the default"
-        );
+        // The row is on unless the user turns it off, so this half of the
+        // contract needs it turned off explicitly.
+        app.current_ui.status_line = bcode_status_line::StatusLineConfig::disabled();
+        assert!(!app.current_ui.status_line.reserves_a_row());
 
         assert!(!notify_status(&mut app, "/tmp"), "no row, no repaint");
         assert!(

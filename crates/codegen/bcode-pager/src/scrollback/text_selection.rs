@@ -2990,7 +2990,7 @@ mod tests {
             semantic(&urls, 0, 6),
             SemanticSelection {
                 anchor: ep(0, 4),
-                head: ep(0, 15),
+                head: ep(0, 24),
                 text: "https://bcode.invalid".to_string(),
             }
         );

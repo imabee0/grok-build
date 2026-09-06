@@ -1683,15 +1683,15 @@
             agent_client_protocol::ModelInfo::new(model_id, "Bcode 4.5".to_string()),
         );
 
-        // Type "/model gr" and position cursor at end (in args).
-        pw.textarea.insert_str("/model gr");
+        // Type "/model bc" and position cursor at end (in args).
+        pw.textarea.insert_str("/model bc");
         pw.refresh_slash(&models);
 
         let snap = pw.slash_snapshot();
         assert!(snap.open, "arg suggestions should be open");
         assert!(snap.args_range.is_some());
 
-        // Accepting the arg completion should replace "gr" with "Bcode 4.5"
+        // Accepting the arg completion should replace "bc" with "Bcode 4.5"
         pw.accept_slash_completion(&models);
         let text = pw.textarea.text().to_string();
         assert!(

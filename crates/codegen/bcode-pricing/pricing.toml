@@ -67,14 +67,29 @@ end = "10:00"
 days = ["mon", "tue", "wed", "thu", "fri"]
 multiplier = 2.0
 
-# No published time-of-use pricing. These figures are INDICATIVE and were not
-# verified against a live price list -- confirm before trusting a number.
-[pricing."gpt-5.2-codex"]
-input = 1.25
-output = 10.0
-cache_read = 0.125
-
+# xAI verified against docs.x.ai (2026-09-06). No time-of-use pricing, but a
+# documented context tier: rates double at >= 200k prompt tokens.
 [pricing."grok-4.6"]
-input = 3.0
-output = 15.0
-cache_read = 0.75
+input = 2.00
+output = 6.00
+cache_read = 0.50
+
+[[pricing."grok-4.6".tier]]
+over_tokens = 200000
+input = 4.00
+output = 12.00
+cache_read = 1.00
+
+# OpenAI is deliberately ABSENT.
+#
+# Their published card has short- and long-context tiers (gpt-5.6-terra: $2.00
+# input / $0.20 cached / $12.00 output short, $4.00 / $0.40 / $18.00 long) but
+# does not document the token boundary between them, and the boundary is the
+# whole point: guess it too high and every long request is billed at half rate.
+#
+# A model with no entry here reports its cost as UNKNOWN, which the UI shows as
+# unknown rather than as zero. That is the correct outcome -- an honest gap beats
+# a confident wrong number in something a budget is enforced against.
+#
+# To price OpenAI locally, add a [pricing."<id>"] block with the tier boundary
+# your account actually bills at.

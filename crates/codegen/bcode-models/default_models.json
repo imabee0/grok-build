@@ -14,7 +14,17 @@
     "quality degrades well before the limit. Raise it per model with",
     "[model.<id>].context_window if you disagree.",
     "",
-    "Prices are not here -- see the pricing table (crate bcode-pricing)."
+    "",
+    "Model ids, context windows and output limits are taken from each provider's",
+    "own documentation, not from memory. Verified 2026-09-06.",
+    "",
+    "Prices live in the bcode-pricing crate, not here.",
+    "",
+    "max_completion_tokens is deliberately unset. A provider's own maximum can",
+    "exceed the window we clamp to (DeepSeek allows 384K output against a 1M",
+    "window; we cap context at 500k), and sending a cap that large risks",
+    "input + max_output exceeding the window. Absent, the provider applies its",
+    "own limit, which is what upstream did for its models too."
   ],
   "default": "deepseek-v4-pro",
   "web_search": "deepseek-v4-flash",
@@ -31,7 +41,6 @@
       "env_key": "DEEPSEEK_API_KEY",
       "api_backend": "chat_completions",
       "context_window": 500000,
-      "max_completion_tokens": 65536,
       "system_prompt_label": "bcode",
       "supports_reasoning_effort": false,
       "auto_compact_threshold_percent": 85,
@@ -48,7 +57,6 @@
       "env_key": "DEEPSEEK_API_KEY",
       "api_backend": "chat_completions",
       "context_window": 500000,
-      "max_completion_tokens": 65536,
       "system_prompt_label": "bcode",
       "supports_reasoning_effort": false,
       "auto_compact_threshold_percent": 85,
@@ -65,7 +73,6 @@
       "env_key": "DEEPSEEK_API_KEY",
       "api_backend": "chat_completions",
       "context_window": 500000,
-      "max_completion_tokens": 65536,
       "system_prompt_label": "bcode",
       "supports_reasoning_effort": false,
       "auto_compact_threshold_percent": 85,
@@ -74,15 +81,50 @@
       "hidden": true
     },
     {
-      "id": "gpt-5.2-codex",
-      "model": "gpt-5.2-codex",
+      "id": "grok-4.6",
+      "model": "grok-4.6",
+      "model_family": "xai",
+      "name": "Grok 4.6",
+      "description": "xAI, via API key or an xAI subscription",
+      "base_url": "https://api.x.ai/v1",
+      "env_key": "XAI_API_KEY",
+      "api_backend": "responses",
+      "context_window": 500000,
+      "system_prompt_label": "bcode",
+      "supports_reasoning_effort": true,
+      "reasoning_effort": "high",
+      "reasoning_efforts": [
+        {
+          "value": "high",
+          "label": "High Effort",
+          "description": "Extensive reasoning",
+          "default": true
+        },
+        {
+          "value": "medium",
+          "label": "Medium Effort",
+          "description": "Balanced"
+        },
+        {
+          "value": "low",
+          "label": "Low Effort",
+          "description": "Quick"
+        }
+      ],
+      "auto_compact_threshold_percent": 85,
+      "compaction_at_tokens": true,
+      "compactions_remaining": 1
+    },
+    {
+      "id": "gpt-5.6-terra",
+      "model": "gpt-5.6-terra",
+      "name": "GPT-5.6 Terra",
+      "description": "OpenAI, balanced intelligence and cost",
       "model_family": "openai",
-      "name": "GPT-5.2 Codex",
-      "description": "OpenAI, via API key or a ChatGPT subscription",
       "base_url": "https://api.openai.com/v1",
       "env_key": "OPENAI_API_KEY",
       "api_backend": "responses",
-      "context_window": 400000,
+      "context_window": 1050000,
       "system_prompt_label": "bcode",
       "supports_reasoning_effort": true,
       "reasoning_effort": "medium",
@@ -109,29 +151,29 @@
       "compactions_remaining": 1
     },
     {
-      "id": "grok-4.6",
-      "model": "grok-4.6",
-      "model_family": "xai",
-      "name": "Grok 4.6",
-      "description": "xAI, via API key or an xAI subscription",
-      "base_url": "https://api.x.ai/v1",
-      "env_key": "XAI_API_KEY",
+      "id": "gpt-6-astra",
+      "model": "gpt-6-astra",
+      "name": "GPT-6 Astra",
+      "description": "OpenAI's most capable model",
+      "model_family": "openai",
+      "base_url": "https://api.openai.com/v1",
+      "env_key": "OPENAI_API_KEY",
       "api_backend": "responses",
-      "context_window": 500000,
+      "context_window": 1050000,
       "system_prompt_label": "bcode",
       "supports_reasoning_effort": true,
-      "reasoning_effort": "high",
+      "reasoning_effort": "medium",
       "reasoning_efforts": [
         {
           "value": "high",
           "label": "High Effort",
-          "description": "Extensive reasoning",
-          "default": true
+          "description": "Extensive reasoning"
         },
         {
           "value": "medium",
           "label": "Medium Effort",
-          "description": "Balanced"
+          "description": "Balanced",
+          "default": true
         },
         {
           "value": "low",
