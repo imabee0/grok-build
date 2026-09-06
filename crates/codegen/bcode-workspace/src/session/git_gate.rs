@@ -248,7 +248,16 @@ impl GitGate {
                 );
                 ROOT_CACHE.lock().clear();
                 let mut state = self.inner.state.lock();
-                for epoch in state.epochs.values_mut() {
+                // Every root the gate knows about, not just those that already
+                // carry an epoch: a root gets its first epoch entry here, so
+                // bumping only `epochs` made the first invalidate for a root a
+                // no-op and served that root's in-flight walk as fresh.
+                let mut roots: Vec<PathBuf> = state.epochs.keys().cloned().collect();
+                roots.extend(state.slots.keys().map(|key| key.root.clone()));
+                roots.sort();
+                roots.dedup();
+                for root in roots {
+                    let epoch = state.epochs.entry(root).or_insert(0);
                     *epoch = epoch.saturating_add(1);
                 }
                 for slot in state.slots.values_mut() {
