@@ -503,7 +503,7 @@ mod tests {
             spec_mut.backend_search = true;
             spec_mut.web_search_config = WebSearchConfig::Enabled {
                 api_key: "test-key".to_string(),
-                base_url: "https://api.invalid/v1".to_string(),
+                base_url: "https://api.bcode.invalid/v1".to_string(),
                 model: "bcode-4".to_string(),
                 extra_headers: Default::default(),
                 alpha_test_key: None,

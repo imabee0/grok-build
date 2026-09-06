@@ -24,8 +24,8 @@ pub const RATE_LIMITED_USER_MESSAGE_OAUTH: &str =
 
 /// API key / team rate-limit copy.
 /// Personal bcode.invalid upgrades do not raise API team limits; admins purchase credits or a higher spend-based tier.
-/// See https://docs.invalid/developers/rate-limits#rate-limit-tiers
-pub const RATE_LIMITED_USER_MESSAGE_API_KEY: &str = "You\u{2019}ve hit your team\u{2019}s API rate limit. Ask a team admin to purchase more credits for higher limits, or try again later. See https://docs.invalid/developers/rate-limits#rate-limit-tiers";
+/// See https://docs.bcode.invalid/developers/rate-limits#rate-limit-tiers
+pub const RATE_LIMITED_USER_MESSAGE_API_KEY: &str = "You\u{2019}ve hit your team\u{2019}s API rate limit. Ask a team admin to purchase more credits for higher limits, or try again later. See https://docs.bcode.invalid/developers/rate-limits#rate-limit-tiers";
 
 /// Well-known free-usage exhaustion code CCP returns on HTTP 429.
 /// Matches `prod_util_well_known_errors::SUBSCRIPTION_FREE_USAGE_EXHAUSTED`.
@@ -520,7 +520,7 @@ mod tests {
         assert!(RATE_LIMITED_USER_MESSAGE_API_KEY.contains("credits"));
         assert!(
             RATE_LIMITED_USER_MESSAGE_API_KEY
-                .contains("https://docs.invalid/developers/rate-limits#rate-limit-tiers")
+                .contains("https://docs.bcode.invalid/developers/rate-limits#rate-limit-tiers")
         );
         assert!(!RATE_LIMITED_USER_MESSAGE_API_KEY.contains("Upgrade your account"));
     }
@@ -534,7 +534,7 @@ mod tests {
         assert_eq!(format_rate_limited_user_message(Some(&wire), true), body);
 
         // Team console rate-limit copy has no personal SuperBcode upsell; it passes through as-is
-        let team = "resource-exhausted: Too many requests for team abc. See https://console.invalid/team/default/rate-limits.";
+        let team = "resource-exhausted: Too many requests for team abc. See https://console.bcode.invalid/team/default/rate-limits.";
         let team_wire = format!("API error (status 429 Too Many Requests): {team}");
         assert_eq!(
             format_rate_limited_user_message(Some(&team_wire), true),

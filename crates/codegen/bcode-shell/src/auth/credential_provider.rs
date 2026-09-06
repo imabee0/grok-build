@@ -653,7 +653,10 @@ mod tests {
         );
         let api_key_provider: bcode_tools::types::SharedApiKeyProvider =
             Arc::new(crate::auth::manager::SharedAuthKeyProvider(mgr.clone()));
-        for denied in ["https://byok.attacker.example/v1", "http://api.invalid/v1"] {
+        for denied in [
+            "https://byok.attacker.example/v1",
+            "http://api.bcode.invalid/v1",
+        ] {
             let resolved =
                 embedding_session_credentials(denied, Some(&mgr), Some(api_key_provider.clone()));
             assert!(
@@ -662,7 +665,7 @@ mod tests {
             );
         }
         let resolved = embedding_session_credentials(
-            "https://api.invalid/v1",
+            "https://api.bcode.invalid/v1",
             Some(&mgr),
             Some(api_key_provider),
         );

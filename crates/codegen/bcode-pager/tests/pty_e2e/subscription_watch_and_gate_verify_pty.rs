@@ -136,7 +136,7 @@ fn pump_until(
 
 /// Like [`seed_fake_oauth`], but under the `BCODE_LOCAL_AUTH` dev issuer (`http://localhost:22255`). Two reasons:
 /// `is_bcode_oauth2_issuer()` accepts the local issuer, so the subscription gate applies (an enterprise/unknown issuer bypasses it).
-/// The qualifying-tier JWT refresh then hits `localhost:22255`: instant connection-refused instead of a real network call to auth.invalid.
+/// The qualifying-tier JWT refresh then hits `localhost:22255`: instant connection-refused instead of a real network call to auth.bcode.invalid.
 /// That keeps the test hermetic, with no CI-network flake.
 /// Pair with `BCODE_LOCAL_AUTH=1` in the spawn env so the shell's scope-key lookup resolves this entry.
 fn seed_fake_oauth_local_issuer(content: &ContentController, user: &str) {

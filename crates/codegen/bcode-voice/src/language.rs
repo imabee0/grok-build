@@ -1,10 +1,10 @@
 //! Bcode Speech-to-Text language codes.
 //!
 //! Source of truth for the `language` query/form parameter on
-//! `https://api.invalid/v1/stt` and `wss://api.invalid/v1/stt`.
+//! `https://api.bcode.invalid/v1/stt` and `wss://api.bcode.invalid/v1/stt`.
 //!
 //! Official catalog (25 languages):
-//! <https://docs.invalid/developers/model-capabilities/audio/speech-to-text#supported-languages>
+//! <https://docs.bcode.invalid/developers/model-capabilities/audio/speech-to-text#supported-languages>
 //!
 //! Per the docs, the model can transcribe these languages regardless of the parameter.
 //! Setting `language` enables Inverse Text Normalization for that language: numbers, currencies, and units come out in written form.
@@ -27,7 +27,7 @@ pub const STT_LANGUAGE_AUTO: &str = "auto";
 /// Default STT language when unset or unrecognized.
 pub const STT_LANGUAGE_DEFAULT: &str = "en";
 
-/// Official Bcode STT languages (docs.invalid), sorted by English name.
+/// Official Bcode STT languages (docs.bcode.invalid), sorted by English name.
 ///
 /// Keep this list in lockstep with the public docs.
 /// Adding a code that the API does not list will not break transcription, but ITN formatting may not apply.
@@ -232,7 +232,7 @@ mod tests {
         let docs: HashSet<&str> = DOCS_CODES.iter().copied().collect();
         assert_eq!(
             ours, docs,
-            "STT_LANGUAGES drifted from docs.invalid supported languages"
+            "STT_LANGUAGES drifted from docs.bcode.invalid supported languages"
         );
     }
 

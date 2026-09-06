@@ -525,7 +525,7 @@ mod tests {
     fn per_tool_gates_are_independent() {
         let cfg = ImageGenConfig::Enabled {
             api_key: "k".into(),
-            base_url: "https://api.invalid/v1".into(),
+            base_url: "https://api.bcode.invalid/v1".into(),
             extra_headers: indexmap::IndexMap::new(),
             image_gen_enabled: false,
             image_edit_enabled: true,
@@ -547,7 +547,7 @@ mod tests {
         preset.insert(SESSION_ID_HEADER.to_string(), "caller-set".to_string());
         let cfg = ImageGenConfig::Enabled {
             api_key: "k".into(),
-            base_url: "https://api.invalid/v1".into(),
+            base_url: "https://api.bcode.invalid/v1".into(),
             extra_headers: preset,
             image_gen_enabled: true,
             image_edit_enabled: true,
@@ -562,7 +562,7 @@ mod tests {
 
         let cfg_plain = ImageGenConfig::Enabled {
             api_key: "k".into(),
-            base_url: "https://api.invalid/v1".into(),
+            base_url: "https://api.bcode.invalid/v1".into(),
             extra_headers: indexmap::IndexMap::new(),
             image_gen_enabled: true,
             image_edit_enabled: true,
@@ -585,7 +585,7 @@ mod tests {
     async fn post_json_attaches_session_and_bearer_headers() {
         let cfg = ImageGenConfig::Enabled {
             api_key: "k".into(),
-            base_url: "https://api.invalid/v1".into(),
+            base_url: "https://api.bcode.invalid/v1".into(),
             extra_headers: indexmap::IndexMap::new(),
             image_gen_enabled: true,
             image_edit_enabled: true,
@@ -598,7 +598,7 @@ mod tests {
             .with_session_id("sess-42");
         let req = client
             .post_json(
-                "https://api.invalid/v1/images",
+                "https://api.bcode.invalid/v1/images",
                 &serde_json::json!({}),
                 Some("tok"),
             )
@@ -622,7 +622,7 @@ mod tests {
     fn client_selects_model_from_override() {
         let mk = |model_override: Option<&str>| ImageGenConfig::Enabled {
             api_key: "k".into(),
-            base_url: "https://api.invalid/v1".into(),
+            base_url: "https://api.bcode.invalid/v1".into(),
             extra_headers: indexmap::IndexMap::new(),
             image_gen_enabled: true,
             image_edit_enabled: true,
@@ -653,7 +653,7 @@ mod tests {
     fn client_selects_edit_model_from_override() {
         let mk = |edit_model_override: Option<&str>| ImageGenConfig::Enabled {
             api_key: "k".into(),
-            base_url: "https://api.invalid/v1".into(),
+            base_url: "https://api.bcode.invalid/v1".into(),
             extra_headers: indexmap::IndexMap::new(),
             image_gen_enabled: true,
             image_edit_enabled: true,
@@ -706,7 +706,7 @@ mod tests {
         // before any other resource (e.g. SessionFolder) is required.
         let cfg = ImageGenConfig::Enabled {
             api_key: "k".into(),
-            base_url: "https://api.invalid/v1".into(),
+            base_url: "https://api.bcode.invalid/v1".into(),
             extra_headers: indexmap::IndexMap::new(),
             image_gen_enabled: true,
             image_edit_enabled: true,

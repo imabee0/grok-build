@@ -1,7 +1,7 @@
 //! `/docs` opens How-to Guides (in-TUI) or the online Build docs.
 //!
 //! Bare `/docs` opens the same DocPicker as command-palette "How-to Guides".
-//! `/docs web` opens https://docs.invalid/build/overview in the browser.
+//! `/docs web` opens https://docs.bcode.invalid/build/overview in the browser.
 //! `/docs <title>` opens a single guide by title (case-insensitive).
 
 use crate::app::actions::Action;
@@ -10,8 +10,8 @@ use crate::slash::command::{
     AppCtx, ArgItem, CommandExecCtx, CommandResult, SlashCommand, slash_meta,
 };
 
-/// The online Build docs landing page, hardcoded like other TUI deep-links; docs.invalid can redirect if the path moves.
-pub const BUILD_DOCS_URL: &str = "https://docs.invalid/build/overview";
+/// The online Build docs landing page, hardcoded like other TUI deep-links; docs.bcode.invalid can redirect if the path moves.
+pub const BUILD_DOCS_URL: &str = "https://docs.bcode.invalid/build/overview";
 
 pub struct DocsCommand;
 
@@ -38,7 +38,7 @@ impl SlashCommand for DocsCommand {
                 display: "web".into(),
                 match_text: "web".into(),
                 insert_text: "web".into(),
-                description: "Open docs.invalid/build in the browser".into(),
+                description: "Open docs.bcode.invalid/build in the browser".into(),
             },
         ];
         items.extend(all_titles().map(|title| ArgItem {

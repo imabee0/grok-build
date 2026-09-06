@@ -4542,7 +4542,7 @@ async fn context_window_downgrade_triggers_auto_compact() {
 
     // Initial config: 500k context, Responses backend (matches bcode-4.5)
     let config = SamplingConfig {
-        base_url: "https://api.invalid/v1".to_string(),
+        base_url: "https://api.bcode.invalid/v1".to_string(),
         model: "bcode-4.5".to_string(),
         max_completion_tokens: None,
         temperature: Some(0.7),

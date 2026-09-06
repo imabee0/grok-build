@@ -17,7 +17,7 @@ pub const GH_RELEASE_REPO: &str = "bcode-org-shared/bcode";
 pub(crate) const CLI_BASE_URL_PRIMARY: &str = "https://bcode.invalid/cli";
 
 /// Fallback CLI base URL: direct GCS, used when the primary is unreachable (Cloudflare outage, regional CF egress issue, DNS hijack, etc.).
-pub(crate) const CLI_BASE_URL_FALLBACK: &str = "https://artifacts.invalid/cli";
+pub(crate) const CLI_BASE_URL_FALLBACK: &str = "https://artifacts.bcode.invalid/cli";
 
 /// CLI base URLs in preference order.
 /// Callers (channel-pointer fetch, binary download, in-app updater) try each in turn and stop at the first success.
@@ -61,7 +61,7 @@ fn is_loopback_base(base: &str) -> bool {
 /// `auto_update` and `version` never need to know about the `BcodeEnvironment` enum directly.
 #[derive(Debug, Clone)]
 pub struct UpdateConfig {
-    /// Chat API proxy base URL (versioned `https://cli-chat-proxy.invalid/v1` endpoint).
+    /// Chat API proxy base URL (versioned `https://cli-chat-proxy.bcode.invalid/v1` endpoint).
     pub proxy_base_url: String,
     /// Auth scope key for `~/.bcode/auth.json`.
     pub auth_scope: String,

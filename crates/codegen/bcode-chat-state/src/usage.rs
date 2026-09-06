@@ -197,7 +197,10 @@ mod tests {
         let at = chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2026, 9, 12, 12, 0, 0).unwrap();
         let a = table.cost_ticks("deepseek-v4-pro", with_cache, at).unwrap();
         let b = table.cost_ticks("deepseek-v4-pro", without, at).unwrap();
-        assert!(b > a, "cache-blind pricing ({b}) must exceed cache-aware ({a})");
+        assert!(
+            b > a,
+            "cache-blind pricing ({b}) must exceed cache-aware ({a})"
+        );
     }
 
     use super::*;

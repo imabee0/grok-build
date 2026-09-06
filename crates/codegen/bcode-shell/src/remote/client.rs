@@ -5,7 +5,7 @@ use indexmap::IndexMap;
 use prod_mc_cli_chat_proxy_types::SubagentBundle;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-const BCODE_CODE_BACKEND_URL: &str = "https://code.invalid";
+const BCODE_CODE_BACKEND_URL: &str = "https://code.bcode.invalid";
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 const BCODE_CODE_WEB_URL: &str = "https://bcode.invalid";
 pub fn share_url(permission_id: &str) -> String {

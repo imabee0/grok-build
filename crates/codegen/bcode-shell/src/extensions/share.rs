@@ -190,11 +190,11 @@ mod tests {
         let expires_at = Utc::now() + ttl;
 
         // We must explicitly set oidc_issuer to a first-party bcode issuer.
-        // Only OIDC tokens against https://auth.invalid (or the local-dev equivalent) return true from is_bcode_auth()
+        // Only OIDC tokens against https://auth.bcode.invalid (or the local-dev equivalent) return true from is_bcode_auth()
         // The share tests need that to exercise the happy path through require_bcode_auth_for_share
         let auth = BcodeAuth {
             auth_mode: AuthMode::Oidc,
-            oidc_issuer: Some("https://auth.invalid".to_string()),
+            oidc_issuer: Some("https://auth.bcode.invalid".to_string()),
             key: "test-key".into(),
             expires_at: Some(expires_at),
             create_time: Utc::now() - Duration::hours(1),

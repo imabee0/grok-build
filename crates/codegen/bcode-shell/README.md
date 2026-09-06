@@ -101,7 +101,7 @@ bcode login
 
 ### API Key
 
-For CI/CD, automation, or environments without browser access, use an API key from [console.invalid](https://console.invalid):
+For CI/CD, automation, or environments without browser access, use an API key from [console.bcode.invalid](https://console.bcode.invalid):
 
 ```bash
 export BCODE_API_KEY="bcode-..."
@@ -112,7 +112,7 @@ The API key takes precedence over browser credentials.
 
 ### OIDC (Customer SSO)
 
-Authenticate developers via your own Identity Provider (Okta, Azure AD, Auth0) instead of `accounts.invalid`.
+Authenticate developers via your own Identity Provider (Okta, Azure AD, Auth0) instead of `accounts.bcode.invalid`.
 
 **1. Register a public client in your IdP:**
 - Grant type: Authorization Code with PKCE
@@ -394,9 +394,9 @@ auth_provider = "litellm"
 If you've authenticated with `bcode login`, you can use the stored credentials to call the CLI chat proxy directly via curl. The proxy requires specific headers that mirror what the bcode CLI sends internally:
 
 ```bash
-curl -s -N -X POST "https://cli-chat-proxy.invalid/v1/chat/completions" \
+curl -s -N -X POST "https://cli-chat-proxy.bcode.invalid/v1/chat/completions" \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $(jq -r '."https://accounts.invalid/sign-in".key' ~/.bcode/auth.json)" \
+  -H "Authorization: Bearer $(jq -r '."https://accounts.bcode.invalid/sign-in".key' ~/.bcode/auth.json)" \
   -H "X-BCODE-Token-Auth: bcode-cli" \
   -H "x-bcode-model-override: bcode" \
   -d '{
@@ -2500,8 +2500,8 @@ The agent persists all session updates automatically. Clients can reconnect and 
 
 | Variable                         | Description                                                                                              |
 | -------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `BCODE_API_KEY`         | API key from [console.invalid](https://console.invalid). Used for custom endpoint auth and API key login      |
-| `BCODE_CLI_CHAT_PROXY_BASE_URL`  | Override the cli-chat-proxy URL (default: `https://cli-chat-proxy.invalid/v1`)                          |
+| `BCODE_API_KEY`         | API key from [console.bcode.invalid](https://console.bcode.invalid). Used for custom endpoint auth and API key login      |
+| `BCODE_CLI_CHAT_PROXY_BASE_URL`  | Override the cli-chat-proxy URL (default: `https://cli-chat-proxy.bcode.invalid/v1`)                          |
 | `BCODE_MODELS_BASE_URL`          | Custom base URL for inference. Model list auto-fetched from `{base_url}/models` (see [Custom Models Endpoint](#custom-models-endpoint)) |
 | `BCODE_MODELS_LIST_URL`          | Override the model list URL if it differs from `{BCODE_MODELS_BASE_URL}/models`                                              |
 | `BCODE_AUTH_PROVIDER_COMMAND`     | External auth binary (alternative to config file). See [External Auth Provider](#external-auth-provider) |

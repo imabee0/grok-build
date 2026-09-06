@@ -66,7 +66,6 @@ impl StatusSegment {
     }
 }
 
-
 /// Token counts get large fast, so render them the way a human reads them.
 /// Truncates rather than rounds: 1999 is "1.9k", never "2.0k", so the figure
 /// never claims more tokens than were actually used.

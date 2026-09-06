@@ -585,7 +585,7 @@ pub(crate) mod tests {
         let header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256);
         let claims = serde_json::json!({
             "sub": "user-42",
-            "iss": "https://auth.invalid",
+            "iss": "https://auth.bcode.invalid",
             "aud": "client-id",
             "exp": 9999999999u64,
             "iat": 1000000000u64,

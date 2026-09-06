@@ -606,7 +606,7 @@ async fn legacy_auth_hint_on_404_model_not_found() {
 fn unauthorized_401_error() -> bcode_sampler::SamplingErrorInfo {
     bcode_sampler::SamplingErrorInfo {
             kind: bcode_sampler::SamplingErrorKind::Api,
-            message: "Unauthorized (401) from https://cli-chat-proxy.invalid/v1/responses: {\"error\":\"Invalid or expired credentials (auth_kind=bearer, x_bcode_token_auth=bcode-cli, upstream=Unauthenticated, reason=no auth context)\"}".into(),
+            message: "Unauthorized (401) from https://cli-chat-proxy.bcode.invalid/v1/responses: {\"error\":\"Invalid or expired credentials (auth_kind=bearer, x_bcode_token_auth=bcode-cli, upstream=Unauthenticated, reason=no auth context)\"}".into(),
             status_code: Some(401),
             is_retryable: false,
             retry_after_secs: None,
@@ -1202,7 +1202,7 @@ async fn seed_provider_memo(actor: &Arc<SessionActor>, provider: crate::auth::Au
 }
 
 /// Regression: switching from a provider-backed model to a first-party model must drop the minted provider token from the chat credentials.
-/// The token must never go out on a later request to `api.invalid`.
+/// The token must never go out on a later request to `api.bcode.invalid`.
 /// Mirrors the forward direction in `set_session_model_invalidates_byok_memo_for_same_model_id`.
 #[tokio::test(flavor = "current_thread")]
 async fn switch_to_first_party_model_drops_minted_provider_token() {
@@ -1231,7 +1231,7 @@ async fn switch_to_first_party_model_drops_minted_provider_token() {
 
             let cfg = bcode_sampler::SamplerConfig {
                 api_key: Some("session-jwt".to_string()),
-                base_url: "https://api.invalid/v1".to_string(),
+                base_url: "https://api.bcode.invalid/v1".to_string(),
                 model,
                 max_completion_tokens: None,
                 temperature: None,

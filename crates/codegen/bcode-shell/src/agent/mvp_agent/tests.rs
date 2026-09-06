@@ -5122,7 +5122,7 @@ async fn storage_mode_self_corrects_to_writeback_when_settings_arrive() {
     let _env = crate::env::EnvVarGuard::remove("BCODE_STORAGE_MODE");
     let auth = crate::auth::BcodeAuth {
         auth_mode: crate::auth::AuthMode::Oidc,
-        oidc_issuer: Some("https://auth.invalid".to_string()),
+        oidc_issuer: Some("https://auth.bcode.invalid".to_string()),
         key: "test-token".to_string(),
         ..Default::default()
     };

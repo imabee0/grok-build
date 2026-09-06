@@ -456,7 +456,7 @@ mod tests {
                 "email": "test@example.com",
                 "first_name": "Test",
                 "refresh_token": "rt1",
-                "oidc_issuer": "https://auth.invalid",
+                "oidc_issuer": "https://auth.bcode.invalid",
                 "oidc_client_id": "c1",
                 "some_future_field": true
             }
@@ -473,7 +473,7 @@ mod tests {
             key: "eyJ.tok".into(),
             user_id: "u1".into(),
             refresh_token: None,
-            oidc_issuer: Some("https://auth.invalid".into()),
+            oidc_issuer: Some("https://auth.bcode.invalid".into()),
             oidc_client_id: Some("c1".into()),
             principal_type: None,
             principal_id: None,
@@ -517,7 +517,7 @@ mod tests {
             key: "eyJ.tok".into(),
             user_id: "u1".into(),
             refresh_token: Some("rt".into()),
-            oidc_issuer: Some("https://auth.invalid".into()),
+            oidc_issuer: Some("https://auth.bcode.invalid".into()),
             oidc_client_id: None,
             principal_type: None,
             principal_id: None,
@@ -539,7 +539,7 @@ mod tests {
             key: "eyJ.tok".into(),
             user_id: "u1".into(),
             refresh_token: Some("rt".into()),
-            oidc_issuer: Some("https://auth.invalid".into()),
+            oidc_issuer: Some("https://auth.bcode.invalid".into()),
             oidc_client_id: Some("c1".into()),
             principal_type: Some("Team".into()),
             principal_id: Some("t1".into()),
@@ -577,7 +577,7 @@ mod tests {
             dir.path(),
             r#"{
             "legacy": { "key": "bcode-old", "user_id": "u1" },
-            "oidc": { "key": "eyJ.old", "user_id": "u2", "refresh_token": "rt-old", "oidc_issuer": "https://auth.invalid" }
+            "oidc": { "key": "eyJ.old", "user_id": "u2", "refresh_token": "rt-old", "oidc_issuer": "https://auth.bcode.invalid" }
         }"#,
         );
 
@@ -603,8 +603,8 @@ mod tests {
         let path = write_auth_json(
             dir.path(),
             r#"{
-            "aaa-stale": { "key": "eyJ.a", "refresh_token": "rt-a", "oidc_issuer": "https://auth.invalid", "expires_at": "2026-01-01T00:00:00Z" },
-            "zzz-active": { "key": "eyJ.z", "refresh_token": "rt-z", "oidc_issuer": "https://auth.invalid", "expires_at": "2026-06-01T00:00:00Z" }
+            "aaa-stale": { "key": "eyJ.a", "refresh_token": "rt-a", "oidc_issuer": "https://auth.bcode.invalid", "expires_at": "2026-01-01T00:00:00Z" },
+            "zzz-active": { "key": "eyJ.z", "refresh_token": "rt-z", "oidc_issuer": "https://auth.bcode.invalid", "expires_at": "2026-06-01T00:00:00Z" }
         }"#,
         );
 
@@ -616,8 +616,8 @@ mod tests {
         let path = write_auth_json(
             dir.path(),
             r#"{
-            "aaa-with-expiry": { "key": "eyJ.a", "refresh_token": "rt-a", "oidc_issuer": "https://auth.invalid", "expires_at": "2026-01-01T00:00:00Z" },
-            "zzz-no-expiry": { "key": "eyJ.z", "refresh_token": "rt-z", "oidc_issuer": "https://auth.invalid" }
+            "aaa-with-expiry": { "key": "eyJ.a", "refresh_token": "rt-a", "oidc_issuer": "https://auth.bcode.invalid", "expires_at": "2026-01-01T00:00:00Z" },
+            "zzz-no-expiry": { "key": "eyJ.z", "refresh_token": "rt-z", "oidc_issuer": "https://auth.bcode.invalid" }
         }"#,
         );
         let (key, _) = read_auth_entry(&path).unwrap();
@@ -631,8 +631,8 @@ mod tests {
         let path = write_auth_json(
             dir.path(),
             r#"{
-            "zzz": { "key": "eyJ.z", "refresh_token": "rt-z", "oidc_issuer": "https://auth.invalid" },
-            "aaa": { "key": "eyJ.a", "refresh_token": "rt-a", "oidc_issuer": "https://auth.invalid" }
+            "zzz": { "key": "eyJ.z", "refresh_token": "rt-z", "oidc_issuer": "https://auth.bcode.invalid" },
+            "aaa": { "key": "eyJ.a", "refresh_token": "rt-a", "oidc_issuer": "https://auth.bcode.invalid" }
         }"#,
         );
 
@@ -662,7 +662,7 @@ mod tests {
         let path = write_auth_json(
             dir.path(),
             r#"{
-            "oidc": { "key": "eyJ.newer", "refresh_token": "rt-newer", "oidc_issuer": "https://auth.invalid", "expires_at": "2026-06-01T00:00:00Z" }
+            "oidc": { "key": "eyJ.newer", "refresh_token": "rt-newer", "oidc_issuer": "https://auth.bcode.invalid", "expires_at": "2026-06-01T00:00:00Z" }
         }"#,
         );
 
@@ -685,7 +685,7 @@ mod tests {
         let path = write_auth_json(
             dir.path(),
             r#"{
-            "oidc": { "key": "eyJ.old", "user_id": "u1", "refresh_token": "rt-keep", "oidc_issuer": "https://auth.invalid" }
+            "oidc": { "key": "eyJ.old", "user_id": "u1", "refresh_token": "rt-keep", "oidc_issuer": "https://auth.bcode.invalid" }
         }"#,
         );
 
@@ -707,7 +707,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = write_auth_json(
             dir.path(),
-            r#"{ "oidc": { "key": "eyJ.tok", "user_id": "u1", "refresh_token": "rt", "oidc_issuer": "https://auth.invalid", "oidc_client_id": "c1" } }"#,
+            r#"{ "oidc": { "key": "eyJ.tok", "user_id": "u1", "refresh_token": "rt", "oidc_issuer": "https://auth.bcode.invalid", "oidc_client_id": "c1" } }"#,
         );
         let url = Url::parse("ws://localhost:9988/v1/tools").unwrap();
         let auth = provider(&url, Some(&path), &ProactiveRefreshConfig::default()).unwrap();
@@ -725,7 +725,7 @@ mod tests {
             key: "eyJ.tok".into(),
             user_id: "u1".into(),
             refresh_token: Some("rt".into()),
-            oidc_issuer: Some("https://auth.invalid".into()),
+            oidc_issuer: Some("https://auth.bcode.invalid".into()),
             oidc_client_id: Some("c1".into()),
             principal_type: Some("Team".into()),
             principal_id: Some("t1".into()),
@@ -777,7 +777,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = write_auth_json(
             dir.path(),
-            r#"{ "oidc": { "key": "eyJ.tok", "user_id": "u1", "refresh_token": "rt", "oidc_issuer": "https://auth.invalid", "oidc_client_id": "c1" } }"#,
+            r#"{ "oidc": { "key": "eyJ.tok", "user_id": "u1", "refresh_token": "rt", "oidc_issuer": "https://auth.bcode.invalid", "oidc_client_id": "c1" } }"#,
         );
         let refresh = ProactiveRefreshConfig {
             enabled: true,

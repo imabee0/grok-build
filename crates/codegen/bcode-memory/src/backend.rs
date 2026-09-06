@@ -1257,7 +1257,7 @@ mod tests {
         let session: bcode_tools::types::SharedApiKeyProvider = Arc::new(PanicKey);
 
         let scoped = EndpointScopedCredentials::for_endpoint(
-            "https://api.invalid/v1",
+            "https://api.bcode.invalid/v1",
             |_| true,
             None,
             Some(session),
@@ -1308,7 +1308,7 @@ mod tests {
         let auth: Arc<dyn bcode_auth::AuthCredentialProvider> = Arc::new(StubAuth);
         let api_key: bcode_tools::types::SharedApiKeyProvider = Arc::new(PanicKey);
         let scoped = EndpointScopedCredentials::for_endpoint(
-            "https://api.invalid/v1",
+            "https://api.bcode.invalid/v1",
             |_| true,
             Some(auth),
             Some(api_key),
@@ -1320,7 +1320,8 @@ mod tests {
             ..Default::default()
         };
         let provider =
-            build_embedding_provider(Some(&config), &scoped, None, "https://api.invalid/v1").await;
+            build_embedding_provider(Some(&config), &scoped, None, "https://api.bcode.invalid/v1")
+                .await;
         assert!(
             provider.is_some(),
             "trusted endpoint must build a provider from the session credential"
@@ -1346,7 +1347,7 @@ mod tests {
         assert!(denied.is_empty(), "untrusted endpoint drops the credential");
 
         let scoped = EndpointScopedCredentials::for_endpoint(
-            "https://api.invalid/v1",
+            "https://api.bcode.invalid/v1",
             |_| true,
             None,
             Some(key()),
@@ -1357,7 +1358,7 @@ mod tests {
             "host casing normalizes"
         );
         assert!(
-            !scoped.approved_for("https://api.invalid/v2"),
+            !scoped.approved_for("https://api.bcode.invalid/v2"),
             "different path rejected"
         );
         assert!(

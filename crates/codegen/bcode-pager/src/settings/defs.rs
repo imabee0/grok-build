@@ -331,7 +331,7 @@ const VOICE_CAPTURE_MODE_CHOICES: &[EnumChoice] = &[
 // Voice STT language choices for the settings modal.
 //
 // Concrete codes must match `bcode_voice::STT_LANGUAGES`, the official Bcode STT catalog
-// The catalog is documented at https://docs.invalid/developers/model-capabilities/audio/speech-to-text
+// The catalog is documented at https://docs.bcode.invalid/developers/model-capabilities/audio/speech-to-text
 // `auto` is client-only; the voice crate resolves it to a concrete code before the STT handshake
 // Order: English (default), System, then the remaining languages A to Z by English name
 // A registry unit test locks this list to the voice crate

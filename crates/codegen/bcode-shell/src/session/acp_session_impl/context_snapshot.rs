@@ -378,12 +378,12 @@ mod tests {
     #[test]
     fn tokenize_text_url_trims_trailing_slash() {
         assert_eq!(
-            tokenize_text_url("https://api.invalid/v1/"),
-            "https://api.invalid/v1/tokenize-text"
+            tokenize_text_url("https://api.bcode.invalid/v1/"),
+            "https://api.bcode.invalid/v1/tokenize-text"
         );
         assert_eq!(
-            tokenize_text_url("https://api.invalid/v1"),
-            "https://api.invalid/v1/tokenize-text"
+            tokenize_text_url("https://api.bcode.invalid/v1"),
+            "https://api.bcode.invalid/v1/tokenize-text"
         );
     }
 

@@ -45,8 +45,8 @@ pub const DEFAULT_AGENT_TYPE: &str = "bcode-plan";
 pub(crate) fn default_agent_type() -> String {
     DEFAULT_AGENT_TYPE.to_owned()
 }
-pub const CLI_CHAT_PROXY_BASE_URL_DEFAULT: &str = "https://cli-chat-proxy.invalid/v1";
-pub const BCODE_API_BASE_URL_DEFAULT: &str = "https://api.invalid/v1";
+pub const CLI_CHAT_PROXY_BASE_URL_DEFAULT: &str = "https://cli-chat-proxy.bcode.invalid/v1";
+pub const BCODE_API_BASE_URL_DEFAULT: &str = "https://api.bcode.invalid/v1";
 const NO_INLINE_CITATIONS_RESPONSE_INCLUDE: &str = "no_inline_citations";
 /// One or more environment variable names that may hold a model API key.
 ///
@@ -2935,7 +2935,7 @@ impl Config {
                 .and_then(|r| r.compaction_detail.as_deref()),
         )
     }
-    /// Resolve whether to use bcode's default OAuth2 (bcode auth.invalid).
+    /// Resolve whether to use bcode's default OAuth2 (bcode auth.bcode.invalid).
     ///
     /// Enterprise OIDC (`oidc` in config.toml) always wins; this only gates the default bcode OAuth2 fallback when no enterprise OIDC is configured.
     ///
@@ -3791,7 +3791,7 @@ pub struct ModelEntryConfig {
     /// See [`ModelInfo::model_family`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_family: Option<String>,
-    /// The base URL of the model. e.g. "https://api.invalid/v1"
+    /// The base URL of the model. e.g. "https://api.bcode.invalid/v1"
     pub base_url: String,
     /// Human-readable display name of the model.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -4091,7 +4091,7 @@ pub struct ModelInfo {
     /// Provider family that mints this model's conversation items (e.g. "bcode"); `None` means unknown.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model_family: Option<String>,
-    /// The base URL of the model (session endpoint). e.g. "https://cli-chat-proxy.invalid/v1"
+    /// The base URL of the model (session endpoint). e.g. "https://cli-chat-proxy.bcode.invalid/v1"
     pub base_url: String,
     /// Human-readable name of the model.
     /// Honored by both the picker (`/model`) and `/session-info`: when set, that's the label shown to users in either consumer.

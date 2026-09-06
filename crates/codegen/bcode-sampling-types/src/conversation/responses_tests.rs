@@ -99,12 +99,12 @@ fn web_search_domain_filters_reach_the_tool_entry() {
     };
     assert_eq!(
         hosted(Some(WebSearchOptions {
-            allowed_domains: Some(vec!["docs.invalid".into(), "arxiv.org".into()]),
+            allowed_domains: Some(vec!["docs.bcode.invalid".into(), "arxiv.org".into()]),
             excluded_domains: None,
         })),
         vec![serde_json::json!({
             "type": "web_search",
-            "filters": { "allowed_domains": ["docs.invalid", "arxiv.org"] },
+            "filters": { "allowed_domains": ["docs.bcode.invalid", "arxiv.org"] },
         })]
     );
     assert_eq!(

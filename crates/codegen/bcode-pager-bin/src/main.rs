@@ -252,7 +252,7 @@ async fn run_setup_command(json: bool) {
                 println!("{out}");
                 if !report.configured {
                     eprintln!(
-                        "Your team doesn't have a managed configuration yet. A team admin can set one up at console.invalid."
+                        "Your team doesn't have a managed configuration yet. A team admin can set one up at console.bcode.invalid."
                     );
                 }
             }
@@ -267,7 +267,7 @@ async fn run_setup_command(json: bool) {
         SetupOutcome::Installed => eprintln!("Applied managed configuration."),
         SetupOutcome::NothingConfigured => {
             eprintln!(
-                "Your team doesn't have a managed configuration yet. A team admin can set one up at console.invalid."
+                "Your team doesn't have a managed configuration yet. A team admin can set one up at console.bcode.invalid."
             );
         }
         SetupOutcome::Skipped => {

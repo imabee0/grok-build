@@ -809,13 +809,13 @@ mod tests {
     #[test]
     fn authorize_url_includes_team_principal_params() {
         let config = OidcAuthConfig {
-            issuer: "https://auth.invalid".into(),
+            issuer: "https://auth.bcode.invalid".into(),
             client_id: TEST_CLIENT_ID.into(),
             scopes: vec!["offline_access".into(), "bcode-cli:access".into()],
             audience: None,
         };
         let oauth2 = OAuth2ProviderConfig {
-            issuer: "https://auth.invalid".into(),
+            issuer: "https://auth.bcode.invalid".into(),
             client_id: TEST_CLIENT_ID.into(),
             scopes: vec!["offline_access".into(), "bcode-cli:access".into()],
             principal_type: Some("Team".into()),
@@ -823,8 +823,8 @@ mod tests {
             referrer: Some("bcode".into()),
         };
         let discovery = Discovery {
-            authorization_endpoint: "https://auth.invalid/authorize".into(),
-            token_endpoint: "https://auth.invalid/token".into(),
+            authorization_endpoint: "https://auth.bcode.invalid/authorize".into(),
+            token_endpoint: "https://auth.bcode.invalid/token".into(),
             jwks_uri: None,
             id_token_signing_alg_values_supported: None,
         };
@@ -853,13 +853,13 @@ mod tests {
     #[test]
     fn authorize_url_uses_oauth2_referrer_override_once() {
         let config = OidcAuthConfig {
-            issuer: "https://auth.invalid".into(),
+            issuer: "https://auth.bcode.invalid".into(),
             client_id: TEST_CLIENT_ID.into(),
             scopes: vec!["offline_access".into(), "bcode-cli:access".into()],
             audience: None,
         };
         let oauth2 = OAuth2ProviderConfig {
-            issuer: "https://auth.invalid".into(),
+            issuer: "https://auth.bcode.invalid".into(),
             client_id: TEST_CLIENT_ID.into(),
             scopes: vec!["offline_access".into(), "bcode-cli:access".into()],
             principal_type: None,
@@ -867,8 +867,8 @@ mod tests {
             referrer: Some("bcode-desktop".into()),
         };
         let discovery = Discovery {
-            authorization_endpoint: "https://auth.invalid/authorize".into(),
-            token_endpoint: "https://auth.invalid/token".into(),
+            authorization_endpoint: "https://auth.bcode.invalid/authorize".into(),
+            token_endpoint: "https://auth.bcode.invalid/token".into(),
             jwks_uri: None,
             id_token_signing_alg_values_supported: None,
         };
@@ -1002,7 +1002,7 @@ mod tests {
         }
         let team_jwt = make_jwt(serde_json::json!({
             "sub": "user-42",
-            "iss": "https://auth.invalid",
+            "iss": "https://auth.bcode.invalid",
             "aud": "test-client",
             "exp": 9999999999u64,
             "iat": 1000000000u64,
@@ -1020,7 +1020,7 @@ mod tests {
         assert!(peek_access_token_principal("").is_none());
         let no_principal = make_jwt(serde_json::json!({
             "sub": "user-42",
-            "iss": "https://auth.invalid",
+            "iss": "https://auth.bcode.invalid",
             "aud": "test-client",
             "exp": 9999999999u64,
             "iat": 1000000000u64,

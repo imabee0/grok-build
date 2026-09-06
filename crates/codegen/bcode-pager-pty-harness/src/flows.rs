@@ -118,7 +118,7 @@ fn seed_fake_oauth_raw(
         bcode_home.join("auth.json"),
         format!(
             r#"{{
-  "https://auth.invalid::b1a00492-073a-47ea-816f-4c329264a828": {{
+  "https://auth.bcode.invalid::b1a00492-073a-47ea-816f-4c329264a828": {{
     "key": "pty-test-oauth-token",
     "auth_mode": "oidc",
     "create_time": "2026-01-01T00:00:00Z",
@@ -126,7 +126,7 @@ fn seed_fake_oauth_raw(
     "email": "{user}@test.invalid",
     "expires_at": "2030-01-01T00:00:00Z",
     "refresh_token": "pty-test-refresh-token",
-    "oidc_issuer": "https://auth.invalid",
+    "oidc_issuer": "https://auth.bcode.invalid",
     "oidc_client_id": "b1a00492-073a-47ea-816f-4c329264a828",
     "coding_data_retention_opt_out": {opted_out}{team_fields}
   }}

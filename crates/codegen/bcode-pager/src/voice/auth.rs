@@ -1,6 +1,6 @@
 //! Bridge the shell's `AuthManager` onto the voice crate's bearer provider.
 //!
-//! voice-api accepts both API keys and OAuth2 tokens directly at `api.invalid` and attributes per-user billing for OAuth.
+//! voice-api accepts both API keys and OAuth2 tokens directly at `api.bcode.invalid` and attributes per-user billing for OAuth.
 //! The voice channel reuses the same bearer the agent uses for chat (no separate env var).
 //!
 //! Resolved per request: the agent's refreshing manager in direct-spawn mode.

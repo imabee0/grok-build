@@ -19,9 +19,9 @@ pub struct BcodeEndpoints {
     pub ws_origin: &'static str,
 }
 const PRODUCTION_ENDPOINTS: BcodeEndpoints = BcodeEndpoints {
-    cli_chat_proxy_base_url: "https://cli-chat-proxy.invalid/v1",
-    asset_server_url: "https://assets.invalid",
-    relay_ws_url: "wss://code.invalid/ws/code-agent",
+    cli_chat_proxy_base_url: "https://cli-chat-proxy.bcode.invalid/v1",
+    asset_server_url: "https://assets.bcode.invalid",
+    relay_ws_url: "wss://code.bcode.invalid/ws/code-agent",
     gateway_ws_url: "wss://bcode.invalid/ws/gw/",
     ws_origin: "https://bcode.invalid",
 };

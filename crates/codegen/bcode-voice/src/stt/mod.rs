@@ -1,4 +1,4 @@
-//! bcode Speech-to-Text: streaming `wss://api.invalid/v1/stt`.
+//! bcode Speech-to-Text: streaming `wss://api.bcode.invalid/v1/stt`.
 
 mod streaming;
 mod types;

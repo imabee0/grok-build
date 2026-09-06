@@ -2188,7 +2188,7 @@ async fn read_parent_sampling_config_keeps_auto_when_catalog_has_slug_key_only()
         .unwrap()
         .update_sampling_config(bcode_sampling_types::SamplingConfig {
             api_backend: crate::sampling::ApiBackend::Responses,
-            base_url: "https://api.invalid/v1".to_string(),
+            base_url: "https://api.bcode.invalid/v1".to_string(),
             ..test_sampling_config("bcode-4.5")
         });
     let (config, model_id) = read_parent_sampling_config(&ctx).await;
@@ -2247,7 +2247,7 @@ async fn read_parent_sampling_config_fallback_wires_bearer_resolver() {
         crate::agent::auth_method::CACHED_TOKEN_AUTH_METHOD_ID,
     );
     ctx.sampling_config.model = "bcode-4.5".to_string();
-    ctx.sampling_config.base_url = "https://api.invalid/v1".to_string();
+    ctx.sampling_config.base_url = "https://api.bcode.invalid/v1".to_string();
     let (config, _) = read_parent_sampling_config(&ctx).await;
     assert!(config.bearer_resolver.is_some());
 }
@@ -2286,7 +2286,7 @@ async fn read_parent_sampling_config_fallback_never_strips_a_fallback_key() {
     );
     ctx.auth = None;
     ctx.sampling_config.model = "bcode-4.5".to_string();
-    ctx.sampling_config.base_url = "https://api.invalid/v1".to_string();
+    ctx.sampling_config.base_url = "https://api.bcode.invalid/v1".to_string();
     ctx.sampling_config.api_key = Some("bcode-env-fallback".to_string());
     let (config, _) = read_parent_sampling_config(&ctx).await;
     assert!(config.bearer_resolver.is_none());
@@ -2300,7 +2300,7 @@ async fn read_parent_sampling_config_fallback_no_resolver_for_api_key_method() {
         crate::agent::auth_method::BCODE_API_KEY_METHOD_ID,
     );
     ctx.sampling_config.model = "bcode-4.5".to_string();
-    ctx.sampling_config.base_url = "https://api.invalid/v1".to_string();
+    ctx.sampling_config.base_url = "https://api.bcode.invalid/v1".to_string();
     let (config, _) = read_parent_sampling_config(&ctx).await;
     assert!(config.bearer_resolver.is_none());
 }
@@ -2390,7 +2390,7 @@ async fn read_parent_sampling_config_fallback_resolves_backend_search_from_catal
     ctx.parent_chat_state = None;
     ctx.sampling_config.model = "bcode-4.5".to_string();
     ctx.sampling_config.api_backend = crate::sampling::ApiBackend::Responses;
-    ctx.sampling_config.base_url = "https://api.invalid/v1".to_string();
+    ctx.sampling_config.base_url = "https://api.bcode.invalid/v1".to_string();
     ctx.sampling_config.supports_backend_search = false;
     ctx.models_manager = crate::agent::models::ModelsManager::new(
         None,

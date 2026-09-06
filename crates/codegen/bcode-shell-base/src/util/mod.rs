@@ -348,61 +348,65 @@ mod tests {
     #[test]
     fn test_is_cli_chat_proxy_url_accepts_proxy_subpath() {
         assert!(is_cli_chat_proxy_url(
-            "https://cli-chat-proxy.invalid/v1/chat/completions"
+            "https://cli-chat-proxy.bcode.invalid/v1/chat/completions"
         ));
     }
     #[test]
     fn test_is_cli_chat_proxy_url_rejects_public_api() {
-        assert!(!is_cli_chat_proxy_url("https://api.invalid/v1"));
+        assert!(!is_cli_chat_proxy_url("https://api.bcode.invalid/v1"));
     }
     #[test]
     fn test_is_cli_chat_proxy_url_rejects_spoofed_hostname() {
         assert!(!is_cli_chat_proxy_url(
-            "https://cli-chat-proxy.invalid.evil.example/v1"
+            "https://cli-chat-proxy.bcode.invalid.evil.example/v1"
         ));
     }
     #[test]
     fn test_is_cli_chat_proxy_url_rejects_v11_prefix_confusion() {
         assert!(!is_cli_chat_proxy_url(
-            "https://cli-chat-proxy.invalid/v11/chat/completions"
+            "https://cli-chat-proxy.bcode.invalid/v11/chat/completions"
         ));
     }
     #[test]
     fn test_is_bcode_api_url() {
-        assert!(is_bcode_api_url("https://api.invalid/v1"));
-        assert!(is_bcode_api_url("https://api.invalid/v1/chat/completions"));
+        assert!(is_bcode_api_url("https://api.bcode.invalid/v1"));
+        assert!(is_bcode_api_url(
+            "https://api.bcode.invalid/v1/chat/completions"
+        ));
         assert!(is_bcode_api_url("https://bcode.invalid"));
         assert!(is_bcode_api_url(
-            "https://cli-chat-proxy.invalid/v1/chat/completions"
+            "https://cli-chat-proxy.bcode.invalid/v1/chat/completions"
         ));
         assert!(!is_bcode_api_url("https://api.openai.com/v1"));
         assert!(!is_bcode_api_url("https://api.anthropic.com/v1"));
         assert!(!is_bcode_api_url(
             "https://generativelanguage.googleapis.com"
         ));
-        assert!(!is_bcode_api_url("https://api.invalid.evil.example/v1"));
+        assert!(!is_bcode_api_url(
+            "https://api.bcode.invalid.evil.example/v1"
+        ));
         assert!(!is_bcode_api_url(
             "https://evil-bcode.invalid.attacker.com/v1"
         ));
         assert!(!is_bcode_api_url("https://prefixbcode.invalid/v1"));
         assert!(!is_bcode_api_url("not-a-url"));
         assert!(!is_bcode_api_url(""));
-        assert!(is_bcode_api_url("http://api.invalid/v1"));
+        assert!(is_bcode_api_url("http://api.bcode.invalid/v1"));
         assert!(is_bcode_api_url("http://localhost:11434/v1"));
     }
     #[test]
     fn test_is_bcode_api_bearer_url() {
-        assert!(is_bcode_api_bearer_url("https://api.invalid/v1"));
-        assert!(!is_bcode_api_bearer_url("http://api.invalid/v1"));
+        assert!(is_bcode_api_bearer_url("https://api.bcode.invalid/v1"));
+        assert!(!is_bcode_api_bearer_url("http://api.bcode.invalid/v1"));
         assert!(!is_bcode_api_bearer_url("http://localhost:11434/v1"));
         {
             assert!(!is_bcode_api_bearer_url("https://localhost:11434/v1"));
             assert!(!is_bcode_api_bearer_url("https://127.0.0.2:11434/v1"));
             assert!(!is_bcode_api_bearer_url("https://[::1]:11434/v1"));
         }
-        assert!(is_bcode_api_bearer_url("https://API.INVALID/v1"));
+        assert!(is_bcode_api_bearer_url("https://API.BCODE.INVALID/v1"));
         assert!(!is_bcode_api_bearer_url(
-            "https://api.invalid@attacker.example/v1"
+            "https://api.bcode.invalid@attacker.example/v1"
         ));
         assert!(!is_bcode_api_bearer_url("https://х.ai/v1"));
     }

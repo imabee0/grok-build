@@ -118,7 +118,7 @@ impl acp::Client for QuietClient {
 /// Written under the legacy scope key, which `lookup_auth` falls back to for any configured scope.
 fn seed_credential(bcode_home: &Path, expires_at: chrono::DateTime<chrono::Utc>) {
     let auth = json!({
-        "https://accounts.invalid/sign-in": {
+        "https://accounts.bcode.invalid/sign-in": {
             "key": STALE_TOKEN,
             "auth_mode": "external",
             "create_time": (chrono::Utc::now() - chrono::Duration::hours(9)).to_rfc3339(),

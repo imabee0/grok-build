@@ -472,7 +472,7 @@
         apply_retry_state(
             &RetryState::Failed {
                 error_type: "auth".into(),
-                message: "Unauthorized (401) from https://cli-chat-proxy.invalid/v1/messages: \
+                message: "Unauthorized (401) from https://cli-chat-proxy.bcode.invalid/v1/messages: \
                           no auth context"
                     .into(),
             },

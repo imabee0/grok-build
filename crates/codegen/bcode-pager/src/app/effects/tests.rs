@@ -2577,7 +2577,7 @@ fn format_session_info_session_auth_ignores_api_key_env() {
     assert!(text.contains("Auth method: OAuth"), "{text}");
     assert!(!text.contains("Manage account and credits"), "{text}");
     assert!(!text.contains("Also present: BCODE_API_KEY"), "{text}");
-    assert!(!text.contains("console.invalid"), "{text}");
+    assert!(!text.contains("console.bcode.invalid"), "{text}");
     assert!(!text.contains("bcode login"), "{text}");
 }
 #[test]
@@ -2604,7 +2604,7 @@ fn format_session_info_api_key_auth_suggests_bcode_login() {
             "{text}"
         );
     assert!(!text.contains("Also present: BCODE_API_KEY"), "{text}");
-    assert!(!text.contains("console.invalid"), "{text}");
+    assert!(!text.contains("console.bcode.invalid"), "{text}");
     assert!(!text.contains("bcode.invalid"), "{text}");
 }
 #[test]
@@ -2614,7 +2614,7 @@ fn format_session_info_session_only_shows_oauth() {
     assert!(text.contains("Auth method: OAuth"), "{text}");
     assert!(!text.contains("Manage account and credits"), "{text}");
     assert!(!text.contains("Also present: BCODE_API_KEY"), "{text}");
-    assert!(!text.contains("console.invalid"), "{text}");
+    assert!(!text.contains("console.bcode.invalid"), "{text}");
     assert!(!text.contains("bcode login"), "{text}");
 }
 #[test]

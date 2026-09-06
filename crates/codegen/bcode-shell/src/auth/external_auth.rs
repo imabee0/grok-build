@@ -132,10 +132,13 @@ mod tests {
 
         // An bcode.invalid issuer claim yields a first-party session (relay-eligible)
         let auth = parse_output(&ok(
-            r#"{"access_token":"t","expires_in":900,"issuer":"https://auth.invalid"}"#,
+            r#"{"access_token":"t","expires_in":900,"issuer":"https://auth.bcode.invalid"}"#,
         ))
         .unwrap();
-        assert_eq!(auth.oidc_issuer.as_deref(), Some("https://auth.invalid"));
+        assert_eq!(
+            auth.oidc_issuer.as_deref(),
+            Some("https://auth.bcode.invalid")
+        );
         assert!(auth.is_bcode_auth());
 
         // Non-bcode.invalid issuer is stored but stays third-party.

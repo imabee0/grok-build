@@ -175,7 +175,7 @@ pub(crate) struct PrefetchEnv {
     pub(crate) model_fetch_auth: ModelFetchAuth,
 }
 
-/// Resolves startup endpoints from the effective config rather than env vars alone, so the prefetch cannot leak the bearer to api.invalid.
+/// Resolves startup endpoints from the effective config rather than env vars alone, so the prefetch cannot leak the bearer to api.bcode.invalid.
 pub(in crate::agent::models) fn resolve_startup_endpoints() -> config::EndpointsConfig {
     let mut endpoints = config::EndpointsConfig::from_effective_config();
     if endpoints.deployment_key.is_none() {

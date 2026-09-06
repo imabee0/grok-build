@@ -2247,7 +2247,7 @@
 ## Features
 
 - **Official bcode plugin marketplace** now appears automatically in the Marketplace tab on first launch.
-- **Image and video generation** now use api.invalid directly for all users.
+- **Image and video generation** now use api.bcode.invalid directly for all users.
 - **New image-to-video and reference-to-video tools** are now available for generating videos from images.
 - **New imagine skill** provides prompt-craft and workflow guidance for image generation and editing tools.
 

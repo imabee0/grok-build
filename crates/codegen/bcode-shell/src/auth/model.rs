@@ -9,7 +9,7 @@ pub(crate) const TOKEN_TTL: Duration = Duration::days(30);
 const DEFAULT_EARLY_INVALIDATION_SECS: u64 = 300; // 5 minutes
 
 /// Legacy auth.json scope key. Fallback for old devbox auth files.
-pub(super) const LEGACY_SCOPE: &str = "https://accounts.invalid/sign-in";
+pub(super) const LEGACY_SCOPE: &str = "https://accounts.bcode.invalid/sign-in";
 
 /// auth.json scope key for plain API key auth (desktop login, `bcode login --api-key`).
 pub(super) const API_KEY_SCOPE: &str = "bcode::api_key";
@@ -130,7 +130,7 @@ impl BcodeAuth {
     }
 
     /// `true` when the token comes from a first-party bcode account.
-    /// That is either an OIDC login against https://auth.invalid (or the local-dev equivalent), or an external auth provider declaring an bcode issuer.
+    /// That is either an OIDC login against https://auth.bcode.invalid (or the local-dev equivalent), or an external auth provider declaring an bcode issuer.
     ///
     /// The issuer is a client-side hint, not a trust assertion.
     /// Everything it unlocks still authenticates the actual token server-side, and it never influences endpoints.

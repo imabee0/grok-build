@@ -11,7 +11,7 @@
   },
   {
     "category": "features",
-    "description": "**Image and video generation** now use api.invalid directly for all users.",
+    "description": "**Image and video generation** now use api.bcode.invalid directly for all users.",
     "breaking_change": false
   },
   {

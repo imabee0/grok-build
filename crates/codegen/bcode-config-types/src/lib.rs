@@ -532,7 +532,7 @@ pub struct RemoteSettings {
     pub subscription_watch_interval_secs: Option<u64>,
     #[serde(default)]
     pub writeback_enabled: Option<bool>,
-    /// OAuth2 provider issuer URL (e.g., "https://auth.invalid").
+    /// OAuth2 provider issuer URL (e.g., "https://auth.bcode.invalid").
     /// When present together with `oauth2_client_id`, the client uses the OAuth2 authorization code flow.
     /// Remote settings control it so the rollout can be gradual.
     #[serde(default)]
@@ -540,7 +540,7 @@ pub struct RemoteSettings {
     /// OAuth2 client_id for the CLI. It pairs with `oauth2_issuer`.
     #[serde(default)]
     pub oauth2_client_id: Option<String>,
-    /// When `Some(true)`, enables bcode's default OAuth2 (bcode auth.invalid).
+    /// When `Some(true)`, enables bcode's default OAuth2 (bcode auth.bcode.invalid).
     /// Enterprise OIDC (user's own IdP via `oidc` config) always wins.
     /// The `--oauth` CLI flag overrides it.
     #[serde(default)]

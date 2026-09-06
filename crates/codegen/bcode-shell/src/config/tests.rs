@@ -3101,7 +3101,7 @@ fn enterprise_two_file_merge_routes_deployment_key_to_proxy() {
             r#"
 [endpoints]
 bcode_api_base_url = "https://inference.acme-corp.example/bcode/v1"
-cli_chat_proxy_base_url = "https://cli-chat-proxy.invalid/v1"
+cli_chat_proxy_base_url = "https://cli-chat-proxy.bcode.invalid/v1"
 
 [model.bcode]
 base_url = "https://inference.acme-corp.example/bcode/v1"
@@ -3142,7 +3142,7 @@ trace_upload_endpoint_url = "https://s3.acme-corp.example"
         .unwrap();
     assert_eq!(
             cfg.endpoints.resolve_managed_config_url(),
-            "https://cli-chat-proxy.invalid/v1/deployment/config"
+            "https://cli-chat-proxy.bcode.invalid/v1/deployment/config"
         );
     assert!(
             !cfg.endpoints
@@ -3161,7 +3161,7 @@ fn managed_config_feedback_user_reaches_resolved_config() {
     let managed = toml::from_str(
             r#"
 [endpoints]
-cli_chat_proxy_base_url = "https://cli-chat-proxy.invalid/v1"
+cli_chat_proxy_base_url = "https://cli-chat-proxy.bcode.invalid/v1"
 
 [feedback.user]
 name = ["os_user"]
@@ -3537,11 +3537,11 @@ fn apply_requirements_allowed_models_clamps_catalog_and_names_source() {
             allowed_models = ["*"]
             [model.bcode-3]
             model = "bcode-3"
-            base_url = "https://api.invalid/v1"
+            base_url = "https://api.bcode.invalid/v1"
             context_window = 256000
             [model.bcode-4]
             model = "bcode-4"
-            base_url = "https://api.invalid/v1"
+            base_url = "https://api.bcode.invalid/v1"
             context_window = 256000
             "#,
         )
@@ -3577,7 +3577,7 @@ fn apply_requirements_allowed_models_ignores_user_catalog_key() {
             allowed_models = ["*"]
             [model.bcode-4]
             model = "bcode-4"
-            base_url = "https://api.invalid/v1"
+            base_url = "https://api.bcode.invalid/v1"
             context_window = 256000
             [model.bcode-4-anything]
             model = "other-model"
@@ -3585,7 +3585,7 @@ fn apply_requirements_allowed_models_ignores_user_catalog_key() {
             context_window = 256000
             [model.my-alias]
             model = "bcode-4"
-            base_url = "https://api.invalid/v1"
+            base_url = "https://api.bcode.invalid/v1"
             context_window = 256000
             "#,
         )
@@ -3615,7 +3615,7 @@ fn apply_requirements_malformed_allowed_models_fail_closes() {
             allowed_models = ["*"]
             [model.bcode-4]
             model = "bcode-4"
-            base_url = "https://api.invalid/v1"
+            base_url = "https://api.bcode.invalid/v1"
             context_window = 256000
             "#,
         )
@@ -3652,11 +3652,11 @@ fn apply_requirements_allowed_models_empty_array_is_unrestricted() {
             allowed_models = ["bcode-4"]
             [model.bcode-3]
             model = "bcode-3"
-            base_url = "https://api.invalid/v1"
+            base_url = "https://api.bcode.invalid/v1"
             context_window = 256000
             [model.bcode-4]
             model = "bcode-4"
-            base_url = "https://api.invalid/v1"
+            base_url = "https://api.bcode.invalid/v1"
             context_window = 256000
             "#,
         )
@@ -3689,11 +3689,11 @@ fn apply_requirements_allowed_models_replaces_user_list() {
             allowed_models = ["*"]
             [model.bcode-3]
             model = "bcode-3"
-            base_url = "https://api.invalid/v1"
+            base_url = "https://api.bcode.invalid/v1"
             context_window = 256000
             [model.bcode-4]
             model = "bcode-4"
-            base_url = "https://api.invalid/v1"
+            base_url = "https://api.bcode.invalid/v1"
             context_window = 256000
             "#,
         )
@@ -3715,11 +3715,11 @@ fn validate_selectable_rejects_dash_m_outside_fleet_pin() {
             default = "bcode-4"
             [model.bcode-3]
             model = "bcode-3"
-            base_url = "https://api.invalid/v1"
+            base_url = "https://api.bcode.invalid/v1"
             context_window = 256000
             [model.bcode-4]
             model = "bcode-4"
-            base_url = "https://api.invalid/v1"
+            base_url = "https://api.bcode.invalid/v1"
             context_window = 256000
             "#,
         )

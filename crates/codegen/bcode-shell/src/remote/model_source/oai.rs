@@ -150,10 +150,16 @@ mod tests {
             .unwrap(),
         );
         let session = ListModelsEndpoint::from_endpoints(&cfg, ModelFetchAuth::Session);
-        assert_eq!(session.url, "https://cli-chat-proxy.invalid/v1/models");
+        assert_eq!(
+            session.url,
+            "https://cli-chat-proxy.bcode.invalid/v1/models"
+        );
         assert_eq!(session.auth, EndpointAuth::Session);
         let deployment = ListModelsEndpoint::from_endpoints(&cfg, ModelFetchAuth::Deployment);
-        assert_eq!(deployment.url, "https://cli-chat-proxy.invalid/v1/models");
+        assert_eq!(
+            deployment.url,
+            "https://cli-chat-proxy.bcode.invalid/v1/models"
+        );
         assert_eq!(deployment.auth, EndpointAuth::Session);
         let api = ListModelsEndpoint::from_endpoints(&cfg, ModelFetchAuth::ApiKey);
         assert_eq!(
@@ -164,7 +170,7 @@ mod tests {
         let default = EndpointsConfig::from_config_value(&toml::Value::Table(Default::default()));
         assert_eq!(
             ListModelsEndpoint::from_endpoints(&default, ModelFetchAuth::ApiKey).url,
-            "https://api.invalid/v1/models"
+            "https://api.bcode.invalid/v1/models"
         );
         let custom = EndpointsConfig::from_config_value(
             &toml::from_str(

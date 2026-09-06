@@ -3044,7 +3044,7 @@ async fn per_turn_tool_overrides_win_over_the_config_web_search_policy() {
             );
 
             let per_turn = bcode_sampling_types::WebSearchOptions {
-                allowed_domains: Some(vec!["docs.invalid".to_string()]),
+                allowed_domains: Some(vec!["docs.bcode.invalid".to_string()]),
                 excluded_domains: None,
             };
             actor.apply_tool_overrides_update(Some(bcode_sampling_types::ToolOverridesUpdate {

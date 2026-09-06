@@ -627,11 +627,11 @@ fn default_model_honors_allowlist_when_no_default_set() {
             allowed_models = ["keep-*"]
             [model.zzz-first]
             model = "zzz-first"
-            base_url = "https://api.invalid/v1"
+            base_url = "https://api.bcode.invalid/v1"
             context_window = 256000
             [model.keep-one]
             model = "keep-one"
-            base_url = "https://api.invalid/v1"
+            base_url = "https://api.bcode.invalid/v1"
             context_window = 256000
             "#,
     );
@@ -653,11 +653,11 @@ fn validate_selectable_rejects_bad_allowlists() {
             allowed_models = ["bcode-4*"]
             [model.bcode-3]
             model = "bcode-3"
-            base_url = "https://api.invalid/v1"
+            base_url = "https://api.bcode.invalid/v1"
             context_window = 256000
             [model.bcode-4]
             model = "bcode-4"
-            base_url = "https://api.invalid/v1"
+            base_url = "https://api.bcode.invalid/v1"
             context_window = 256000
             "#,
     );
@@ -674,7 +674,7 @@ fn validate_selectable_rejects_bad_allowlists() {
             allowed_models = ["nomatch-*"]
             [model.bcode-4]
             model = "bcode-4"
-            base_url = "https://api.invalid/v1"
+            base_url = "https://api.bcode.invalid/v1"
             context_window = 256000
             "#,
     );
@@ -711,11 +711,11 @@ fn set_session_model_fleet_deny_uses_organization_message() {
             [models]
             [model.bcode-3]
             model = "bcode-3"
-            base_url = "https://api.invalid/v1"
+            base_url = "https://api.bcode.invalid/v1"
             context_window = 256000
             [model.bcode-4]
             model = "bcode-4"
-            base_url = "https://api.invalid/v1"
+            base_url = "https://api.bcode.invalid/v1"
             context_window = 256000
             "#,
     )

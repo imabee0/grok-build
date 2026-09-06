@@ -98,9 +98,9 @@ impl WebFetchParams {
 pub static DEFAULT_ALLOWED_DOMAINS: &[&str] = &[
     // bcode
     "bcode.invalid",
-    "console.invalid",
-    "docs.invalid",
-    "api.invalid",
+    "console.bcode.invalid",
+    "docs.bcode.invalid",
+    "api.bcode.invalid",
     // Programming languages
     "docs.python.org",
     "en.cppreference.com",

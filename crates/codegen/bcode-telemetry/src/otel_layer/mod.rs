@@ -49,7 +49,7 @@ pub struct OtelClientInfo {
 /// OTLP trace-export transport settings, resolved from the `OTEL_*` env vars or managed config.
 #[derive(Debug, Default, Clone)]
 pub struct OtelExporterConfig {
-    /// Full OTLP traces endpoint URL (e.g. `https://cli-chat-proxy.invalid/v1/traces`).
+    /// Full OTLP traces endpoint URL (e.g. `https://cli-chat-proxy.bcode.invalid/v1/traces`).
     pub traces_url: String,
     /// `OTEL_EXPORTER_OTLP_HEADERS` pairs.
     pub extra_headers: Vec<(String, String)>,

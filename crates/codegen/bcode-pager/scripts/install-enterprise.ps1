@@ -113,8 +113,8 @@ if ($Version -and $Version -notmatch '^\d+\.\d+\.\d+(-\S+)?$') {
 
 # --- Resolve auth ---
 
-$OidcScope = 'https://auth.invalid::b1a00492-073a-47ea-816f-4c329264a828'
-$LegacyScope = 'https://accounts.invalid/sign-in'
+$OidcScope = 'https://auth.bcode.invalid::b1a00492-073a-47ea-816f-4c329264a828'
+$LegacyScope = 'https://accounts.bcode.invalid/sign-in'
 $AuthSource = ''
 
 if ($env:BCODE_DEPLOYMENT_KEY) {
@@ -281,7 +281,7 @@ if (-not (Test-Path $ConfigFile)) {
 # --- Fetch deployment config (deployment key only) ---
 
 if ($env:BCODE_DEPLOYMENT_KEY) {
-    $ProxyUrl = if ($env:BCODE_PROXY_URL) { $env:BCODE_PROXY_URL } else { 'https://cli-chat-proxy.invalid/v1' }
+    $ProxyUrl = if ($env:BCODE_PROXY_URL) { $env:BCODE_PROXY_URL } else { 'https://cli-chat-proxy.bcode.invalid/v1' }
     # Refuse cleartext / userinfo / empty-host proxies before attaching the key.
     try {
         $proxyUri = [Uri]$ProxyUrl

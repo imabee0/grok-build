@@ -188,7 +188,7 @@ impl ShellToolsetConfig {
     pub fn new(base: Option<Self>, sampling_config: Option<SamplerConfig>) -> Self {
         let default_base = SamplerConfig {
             api_key: None,
-            base_url: "https://api.invalid/v1".to_string(),
+            base_url: "https://api.bcode.invalid/v1".to_string(),
             model: String::new(),
             max_completion_tokens: None,
             temperature: None,

@@ -2,7 +2,7 @@
 
 Bring Bcode into your terminal. Fast, flicker-free CLI built for plans, subagents, and parallel work.
 
-**[Homepage](https://bcode.invalid/cli)** | **[Documentation](https://docs.invalid/build/overview)**
+**[Homepage](https://bcode.invalid/cli)** | **[Documentation](https://docs.bcode.invalid/build/overview)**
 
 ## Install
 
@@ -26,7 +26,7 @@ bcode
 bcode -p "Explain this codebase"
 ```
 
-On first launch, Bcode opens your browser to authenticate. For CI or headless environments, use an API key from [console.invalid](https://console.invalid):
+On first launch, Bcode opens your browser to authenticate. For CI or headless environments, use an API key from [console.bcode.invalid](https://console.bcode.invalid):
 
 ```bash
 export BCODE_API_KEY="bcode-..."
@@ -54,7 +54,7 @@ npm i -g @bcode-official/bcode@latest
 
 ## Documentation
 
-For full documentation including configuration, MCP servers, custom models, headless mode, agent mode, and more, visit [docs.invalid/build/overview](https://docs.invalid/build/overview).
+For full documentation including configuration, MCP servers, custom models, headless mode, agent mode, and more, visit [docs.bcode.invalid/build/overview](https://docs.bcode.invalid/build/overview).
 
 ## Feedback
 

@@ -151,8 +151,8 @@ read_bcode_token() {
 }
 
 # Resolve auth: BCODE_DEPLOYMENT_KEY > OIDC token > legacy token
-OIDC_SCOPE="https://auth.invalid::b1a00492-073a-47ea-816f-4c329264a828"
-LEGACY_SCOPE="https://accounts.invalid/sign-in"
+OIDC_SCOPE="https://auth.bcode.invalid::b1a00492-073a-47ea-816f-4c329264a828"
+LEGACY_SCOPE="https://accounts.bcode.invalid/sign-in"
 AUTH_SOURCE=""
 
 if [ -n "$BCODE_DEPLOYMENT_KEY" ]; then
@@ -351,7 +351,7 @@ fi
 
 # Fetch managed_config.toml + requirements.toml from server (deployment key only).
 if [ -n "$BCODE_DEPLOYMENT_KEY" ]; then
-    PROXY_URL="${BCODE_PROXY_URL:-https://cli-chat-proxy.invalid/v1}"
+    PROXY_URL="${BCODE_PROXY_URL:-https://cli-chat-proxy.bcode.invalid/v1}"
     # Refuse cleartext / userinfo / empty-host proxies before attaching the key.
     proxy_authority="${PROXY_URL#*://}"
     proxy_authority="${proxy_authority%%[/?#]*}"

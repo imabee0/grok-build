@@ -432,9 +432,9 @@ fn parse_openai_format_uses_id_field() {
         "owned_by": "bcode",
         "context_window": 131072
     });
-    let result = parse_remote_model_value(&value, "https://api.invalid/v1").unwrap();
+    let result = parse_remote_model_value(&value, "https://api.bcode.invalid/v1").unwrap();
     assert_eq!(result.model, "bcode-3");
-    assert_eq!(result.base_url, "https://api.invalid/v1");
+    assert_eq!(result.base_url, "https://api.bcode.invalid/v1");
     assert_eq!(result.name.as_deref(), Some("bcode-3"));
 }
 #[test]
@@ -880,12 +880,12 @@ fn list_url_defaults_to_proxy_models() {
 fn list_url_derived_from_base_url() {
     let ep = endpoints(
         "https://proxy.bcode.invalid/v1",
-        Some("https://api.invalid/v1"),
+        Some("https://api.bcode.invalid/v1"),
         None,
     );
     assert_eq!(
         ep.resolve_models_list_url(),
-        "https://api.invalid/v1/models"
+        "https://api.bcode.invalid/v1/models"
     );
 }
 #[test]
@@ -920,7 +920,10 @@ fn deployment_config_url_uses_cli_chat_proxy_when_not_overridden() {
     )
     .unwrap();
     let url = EndpointsConfig::from_config_value(&managed).resolve_managed_config_url();
-    assert_eq!(url, "https://cli-chat-proxy.invalid/v1/deployment/config");
+    assert_eq!(
+        url,
+        "https://cli-chat-proxy.bcode.invalid/v1/deployment/config"
+    );
     assert!(
         !url.contains("acme-corp"),
         "deployment key would be sent to the inference host: {url}"

@@ -769,7 +769,7 @@ pub(crate) const TIER_RESTRICTED_UPSELL: &str = "Video generation is a SuperBcod
 /// Error for video tool calls in a ZDR session with no output bucket.
 /// A verbatim tool *error* (unlike the [`TIER_RESTRICTED_UPSELL`] prose):
 /// paraphrasing a privacy-adjacent message risks distortion.
-pub(crate) const ZDR_RESTRICTED_MESSAGE: &str = "Video generation tools are unavailable under zero data retention (ZDR). To enable, either turn off /privacy mode to disable ZDR or supply a user-hosted storage bucket (see https://docs.invalid/build/settings/zdr-video-storage).";
+pub(crate) const ZDR_RESTRICTED_MESSAGE: &str = "Video generation tools are unavailable under zero data retention (ZDR). To enable, either turn off /privacy mode to disable ZDR or supply a user-hosted storage bucket (see https://docs.bcode.invalid/build/settings/zdr-video-storage).";
 
 fn zdr_restricted_error() -> bcode_tool_runtime::ToolError {
     bcode_tool_runtime::ToolError::new(
@@ -1331,7 +1331,7 @@ mod tests {
     async fn request_attaches_session_and_bearer_headers() {
         let cfg = VideoGenConfig::Enabled {
             api_key: "k".into(),
-            base_url: "https://api.invalid/v1".into(),
+            base_url: "https://api.bcode.invalid/v1".into(),
             extra_headers: indexmap::IndexMap::new(),
             zdr_video_output_s3: None,
             tier_restricted: false,
@@ -1343,7 +1343,7 @@ mod tests {
         let req = client
             .request(
                 reqwest::Method::POST,
-                "https://api.invalid/v1/videos",
+                "https://api.bcode.invalid/v1/videos",
                 Some("tok"),
             )
             .build()

@@ -33,7 +33,7 @@ pub struct VoiceConfig {
 impl Default for VoiceConfig {
     fn default() -> Self {
         Self {
-            api_base: "https://api.invalid".into(),
+            api_base: "https://api.bcode.invalid".into(),
             stt_ws_path: "/v1/stt".into(),
             language: "en".into(),
             sample_rate: DEFAULT_SAMPLE_RATE,
@@ -60,7 +60,7 @@ impl VoiceConfig {
             .and_then(|t| toml::Value::Table(t.clone()).try_into().ok())
             .unwrap_or_default();
 
-        // Read `[voice].api_base` from the raw table, not `cfg`: serde default makes "unset" and an explicit `https://api.invalid` indistinguishable
+        // Read `[voice].api_base` from the raw table, not `cfg`: serde default makes "unset" and an explicit `https://api.bcode.invalid` indistinguishable
         cfg.api_base = non_empty_str(
             voice_table
                 .and_then(|t| t.get("api_base"))
@@ -121,18 +121,22 @@ mod tests {
     fn default_stt_ws_uses_wss() {
         assert_eq!(
             VoiceConfig::default().stt_ws_url().unwrap(),
-            "wss://api.invalid/v1/stt"
+            "wss://api.bcode.invalid/v1/stt"
         );
     }
 
     #[test]
     fn scheme_less_and_wss_bases() {
-        for base in ["api.invalid", "wss://api.invalid", "HTTPS://api.invalid"] {
+        for base in [
+            "api.bcode.invalid",
+            "wss://api.bcode.invalid",
+            "HTTPS://api.bcode.invalid",
+        ] {
             let cfg = VoiceConfig {
                 api_base: base.into(),
                 ..VoiceConfig::default()
             };
-            assert_eq!(cfg.stt_ws_url().unwrap(), "wss://api.invalid/v1/stt");
+            assert_eq!(cfg.stt_ws_url().unwrap(), "wss://api.bcode.invalid/v1/stt");
         }
     }
 
@@ -218,7 +222,7 @@ api_base = "  "
         .unwrap();
         let cfg = VoiceConfig::from_config_table(&table, None);
         assert_eq!(cfg.api_base, VoiceConfig::default().api_base);
-        assert_eq!(cfg.stt_ws_url().unwrap(), "wss://api.invalid/v1/stt");
+        assert_eq!(cfg.stt_ws_url().unwrap(), "wss://api.bcode.invalid/v1/stt");
     }
 
     #[test]
@@ -256,15 +260,15 @@ bcode_api_base_url = "https://config.example.com"
 [endpoints]
 bcode_api_base_url = "https://proxy.example.com/bcode/v1"
 [voice]
-api_base = "https://api.invalid"
+api_base = "https://api.bcode.invalid"
 language = "es"
 "#,
         )
         .unwrap();
         let cfg = VoiceConfig::from_config_table(&table, None);
-        assert_eq!(cfg.api_base, "https://api.invalid");
+        assert_eq!(cfg.api_base, "https://api.bcode.invalid");
         assert_eq!(cfg.language, "es");
-        assert_eq!(cfg.stt_ws_url().unwrap(), "wss://api.invalid/v1/stt");
+        assert_eq!(cfg.stt_ws_url().unwrap(), "wss://api.bcode.invalid/v1/stt");
     }
 
     #[test]
