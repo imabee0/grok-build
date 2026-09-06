@@ -25,12 +25,15 @@ pub fn is_project_dir(cwd: &Path) -> bool {
         return false;
     }
 
-    if cwd.ancestors().any(|p| p.join(".git").exists()) {
-        return true;
-    }
-
+    // Before the `.git` check: another tool's config directory is not a
+    // workspace of ours even when its owner version-controls it, and several of
+    // these (`~/.claude`, `~/.config`) commonly are repositories.
     if has_excluded_component(cwd) {
         return false;
+    }
+
+    if cwd.ancestors().any(|p| p.join(".git").exists()) {
+        return true;
     }
 
     if is_platform_system_dir(cwd) {

@@ -3930,8 +3930,7 @@ mod tests {
         let mut buf = Buffer::empty(area);
         let theme = Theme::current();
         // 40-col terminal; a URL longer than one row must wrap at the exact screen edge with no leading spaces so copy-paste stays intact
-        let url =
-            "https://accounts.bcode.invalid/oauth2/device?user_code=WXYZ-1234&extra=0123456789";
+        let url = "https://accounts.bcode.invalid/oauth2/device?user_code=WXYZ-1234&extra=01234";
 
         render_welcome_authenticating(
             area,

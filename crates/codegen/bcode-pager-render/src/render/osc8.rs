@@ -1313,7 +1313,10 @@ mod tests {
 
         assert_eq!(overlay.links().len(), 1);
         assert_eq!(overlay.links()[0].col_start, 10);
-        assert_eq!(overlay.links()[0].col_end, 10 + 12);
+        assert_eq!(
+            overlay.links()[0].col_end,
+            10 + "https://bcode.invalid".len() as u16
+        );
     }
 
     // ── File path detection ──

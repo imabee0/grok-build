@@ -1,7 +1,7 @@
 //! Key shortcut types and the `key!()` macro.
 //!
 //! ```
-//! use bcode_pager::input::key::key;
+//! use bcode_pager_render::input::key::key;
 //!
 //! // Simple key
 //! let q = key!('q');
