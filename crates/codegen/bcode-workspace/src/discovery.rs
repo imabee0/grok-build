@@ -532,12 +532,14 @@ mod tests {
     #[tokio::test]
     async fn load_permissions_with_settings_file_returns_object() {
         let tmp = tempfile::tempdir().unwrap();
-        // Create a minimal .claude/settings.json with a permission rule so the test always exercises the non-null path
-        let claude_dir = tmp.path().join(".claude");
-        fs::create_dir_all(&claude_dir).unwrap();
+        // A project `.bcode/config.toml` rule, so the test always exercises the
+        // non-null path. It cannot be another tool's settings file: bcode reads
+        // no permissions from those.
+        let cfg_dir = tmp.path().join(".bcode");
+        fs::create_dir_all(&cfg_dir).unwrap();
         fs::write(
-            claude_dir.join("settings.json"),
-            r#"{"permissions":{"allow":["Bash(git status)"]}}"#,
+            cfg_dir.join("config.toml"),
+            "[permission]\nallow = [\"Bash(git status)\"]\n",
         )
         .unwrap();
 

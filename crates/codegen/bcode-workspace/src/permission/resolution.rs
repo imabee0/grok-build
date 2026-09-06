@@ -547,14 +547,14 @@ async fn resolve_permissions_with_provenance_inner(
         UserDefaultModeLoad::Apply
     };
 
-    // Phase 2 cutoff: skip the .claude/ fallback once the user has imported.
-    // Native config-derived permissions still apply.
-    let skip_claude = is_claude_import_marked_with_log("resolve_permissions_with_provenance");
-    let settings_json = if skip_claude {
-        None
-    } else {
-        resolve_claude_settings_inner(cwd, project_trusted, policy_block, user_mode_load)
-    };
+    // bcode never inherits another tool's permission rules or `defaultMode`.
+    // Upstream read `.claude/settings.json` here, so a `bypassPermissions`
+    // written for a different agent silently governed this one too, and the
+    // reader it used walked the real `$HOME` from inside unit tests. Reading
+    // another tool's *instructions* stays available as opt-in compat;
+    // permissions are not offered at all.
+    let settings_json: Option<(PermissionConfig, Vec<SkippedPermission>, PathBuf)> = None;
+    let _ = user_mode_load;
 
     let mut all_rules: Vec<Sourced<PermissionRule>> = Vec::new();
     all_rules.extend(load_requirements_permissions());
@@ -631,150 +631,6 @@ async fn resolve_permissions_with_provenance_inner(
         skipped,
         yolo_lock,
     })
-}
-
-/// Resolve permissions from Claude settings, merging allow/deny/ask across all settings scopes.
-/// Broad global grants therefore survive when a project file also exists.
-/// `defaultMode` is not merged: the most-specific file that sets it wins.
-/// An unrecognized value still claims the slot, as the fail-safe `default`.
-///
-/// `defaultMode` handling:
-///   - `bypassPermissions`: catch-all `Allow Any`, but ignored (recorded as a [`SkippedPermission`]) when [`yolo_disabled_by_policy`] pins bypass off
-///   - `acceptEdits`: synthetic `Allow Edit`
-///   - `default` / `plan`: no synthetic rules
-///   - `dontAsk`: [`PromptPolicy::Deny`] (unapproved tools auto-denied)
-///   - `auto`: [`PromptPolicy::Auto`] (classifier; seeded on the manager)
-///
-/// When [`UserDefaultModeLoad::SkipManagedOwns`], only allow/deny/ask rules are loaded from user/project/local files.
-///
-/// Synthetic rules are appended last as fallbacks (explicit deny still wins).
-/// `policy_block` is threaded for testability; prod passes the live pin.
-/// When `project_trusted` is false, only global `~/.claude` settings load.
-/// Project-tree rules and `defaultMode` are dropped (same gate as env injection).
-fn resolve_claude_settings_inner(
-    cwd: &Path,
-    project_trusted: bool,
-    policy_block: Option<&'static str>,
-    user_mode_load: UserDefaultModeLoad,
-) -> Option<(PermissionConfig, Vec<SkippedPermission>, PathBuf)> {
-    let mut all_rules = Vec::new();
-    let mut all_skipped = Vec::new();
-    let mut primary_source_path: Option<PathBuf> = None;
-    // Track defaultMode from the most specific file (paths are most-specific-first).
-    // Also track its source path so synthetic rules have provenance even when no explicit permissions block exists
-    let mut default_mode_source: Option<PathBuf> = None;
-    let mut applied_mode: Option<DefaultPermissionMode> = None;
-    let mut prompt_policy = PromptPolicy::default();
-    let mut files_with_rules: u32 = 0;
-
-    // Same path set as env injection ([`claude_settings_paths_for_trust`]).
-    for path in claude_settings_paths_for_trust(cwd, project_trusted) {
-        let Some(settings) = load_claude_settings(&path) else {
-            continue;
-        };
-
-        if let Some(dirs) = &settings.additional_directories {
-            info!(
-                path = %path.display(),
-                count = dirs.len(),
-                "Claude settings: additionalDirectories parsed but not supported"
-            );
-        }
-
-        // defaultMode: most-specific file that *sets* the key wins, including typos (treated as default)
-        // Skipped when managed-settings owns mode
-        if user_mode_load == UserDefaultModeLoad::Apply
-            && default_mode_source.is_none()
-            && let Some(raw) = &settings.default_mode
-        {
-            default_mode_source = Some(path.clone());
-            let mode = parse_default_mode_claiming_scope(raw, &path, &mut all_skipped);
-            applied_mode = Some(mode);
-            prompt_policy = mode.effects().prompt_policy;
-        }
-
-        if let Some(perms) = settings.permissions {
-            let (cfg, warnings) = perms.into_permission_config();
-            for w in &warnings {
-                warn!(path = %path.display(), "{}", w);
-            }
-            // Rules *or* skip-only parse failures still own provenance for `bcode inspect`
-            // All-invalid allow/deny/ask must not leave primary_source_path unset and panic below
-            if (!cfg.rules.is_empty() || !warnings.is_empty()) && primary_source_path.is_none() {
-                primary_source_path = Some(path.clone());
-            }
-            if !cfg.rules.is_empty() {
-                files_with_rules += 1;
-                debug!(
-                    path = %path.display(),
-                    rules = cfg.rules.len(),
-                    "Claude settings: loaded permission rules"
-                );
-            }
-            all_rules.extend(cfg.rules);
-            all_skipped.extend(warnings.into_iter().map(|w| {
-                let (rule, reason) = w
-                    .split_once(" \u{2014} ")
-                    .or_else(|| w.split_once(" -- "))
-                    .map_or((w.as_str(), ""), |(r, d)| (r, d));
-                SkippedPermission {
-                    rule: rule.to_string(),
-                    reason: reason.to_string(),
-                }
-            }));
-        }
-    }
-
-    let mut bypass_blocked = false;
-    if let Some(mode) = applied_mode {
-        let (syn_rules, syn_skipped, blocked) =
-            synthetic_rules_for_default_mode(mode, policy_block);
-        bypass_blocked = blocked;
-        all_skipped.extend(syn_skipped);
-        all_rules.extend(syn_rules);
-    }
-
-    // A blocked bypass, a claimed defaultMode (incl. a typo treated as default), or skip records still resolve (possibly zero rules).
-    // Provenance then reaches `bcode inspect` via the outer resolver
-    if all_rules.is_empty()
-        && prompt_policy == PromptPolicy::Ask
-        && !bypass_blocked
-        && default_mode_source.is_none()
-        && all_skipped.is_empty()
-    {
-        return None;
-    }
-
-    if files_with_rules > 1 {
-        info!(
-            files = files_with_rules,
-            total_rules = all_rules.len(),
-            "Claude settings: merged permission rules from multiple files"
-        );
-    }
-
-    // Prefer the first file with explicit permission rules or skip-only parse failures; fall back to the file that provided defaultMode
-    // Never panic: a skip-only / mode-only resolution must always surface.
-    let source_path = primary_source_path
-        .or(default_mode_source)
-        .unwrap_or_else(|| {
-            warn!(
-                cwd = %cwd.display(),
-                skipped = all_skipped.len(),
-                "Claude settings resolution has no settings file provenance; using cwd"
-            );
-            cwd.to_path_buf()
-        });
-
-    Some((
-        PermissionConfig {
-            rules: all_rules,
-            prompt_policy,
-            default_mode_configured: applied_mode.is_some(),
-        },
-        all_skipped,
-        source_path,
-    ))
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
