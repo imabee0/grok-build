@@ -130,21 +130,35 @@ fn load_candidates(sessions_root: &Path) -> Result<(SessionCandidates, SessionCa
     for cwd_entry in entries {
         let cwd_entry = cwd_entry.map_err(|error| io_error("read", sessions_root, error))?;
         let cwd_path = cwd_entry.path();
-        let cwd_type = cwd_entry
-            .file_type()
-            .map_err(|error| io_error("inspect", &cwd_path, error))?;
+        let cwd_type = match cwd_entry.file_type() {
+            Ok(file_type) => file_type,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(io_error("inspect", &cwd_path, error)),
+        };
         if !cwd_type.is_dir() || cwd_type.is_symlink() {
             continue;
         }
-        for session_entry in
-            fs::read_dir(&cwd_path).map_err(|error| io_error("read", &cwd_path, error))?
-        {
-            let session_entry =
-                session_entry.map_err(|error| io_error("read", &cwd_path, error))?;
+        // A cwd directory can be removed while this scan runs -- a session
+        // cleanup, another process, a worktree torn down -- and the scan is
+        // between its own readdir and this one. Skip what vanished rather than
+        // failing every lookup with it.
+        let session_entries = match fs::read_dir(&cwd_path) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(io_error("read", &cwd_path, error)),
+        };
+        for session_entry in session_entries {
+            let session_entry = match session_entry {
+                Ok(entry) => entry,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) => return Err(io_error("read", &cwd_path, error)),
+            };
             let path = session_entry.path();
-            let file_type = session_entry
-                .file_type()
-                .map_err(|error| io_error("inspect", &path, error))?;
+            let file_type = match session_entry.file_type() {
+                Ok(file_type) => file_type,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) => return Err(io_error("inspect", &path, error)),
+            };
             let Some(id) = session_entry.file_name().to_str().map(str::to_owned) else {
                 continue;
             };

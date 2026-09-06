@@ -2358,26 +2358,45 @@ fn cleanup_queue_dir(queue_dir: &Path, max_age: Duration, stats: Option<&UploadQ
     let all_names: HashSet<std::ffi::OsString> = entries.iter().map(|e| e.file_name()).collect();
     let mut cleaned = 0u64;
     let mut cleaned_bytes = 0u64;
+
+    // Age every entry before deleting any of them. A temp file's age comes from
+    // its sidecar, so deleting the sidecar first -- which readdir order alone
+    // decides -- would leave the temp with no age but its own mtime, and the
+    // pair would be reaped half at a time.
+    let mut ages: Vec<(&std::fs::DirEntry, std::fs::Metadata, Duration)> = Vec::new();
     for entry in &entries {
         let Ok(metadata) = entry.metadata() else {
             continue;
         };
-        let path = entry.path();
         let name = entry.file_name();
-        let is_scratch_root = metadata.is_dir() && name == "scratch";
-        if is_scratch_root {
-            let (sub_cleaned, sub_bytes) = cleanup_scratch_subdirs(&path, max_age);
-            cleaned += sub_cleaned;
-            cleaned_bytes += sub_bytes;
+        if metadata.is_dir() && name == "scratch" {
             continue;
         }
-        let age = pair_age(&path, &name, &all_names).unwrap_or_else(|| {
+        let age = pair_age(&entry.path(), &name, &all_names).unwrap_or_else(|| {
             metadata
                 .modified()
                 .ok()
                 .and_then(|m| m.elapsed().ok())
                 .unwrap_or(Duration::MAX)
         });
+        ages.push((entry, metadata, age));
+    }
+
+    for entry in &entries {
+        let Ok(metadata) = entry.metadata() else {
+            continue;
+        };
+        let name = entry.file_name();
+        if metadata.is_dir() && name == "scratch" {
+            let (sub_cleaned, sub_bytes) = cleanup_scratch_subdirs(&entry.path(), max_age);
+            cleaned += sub_cleaned;
+            cleaned_bytes += sub_bytes;
+        }
+    }
+
+    for (entry, metadata, age) in ages {
+        let path = entry.path();
+        let name = entry.file_name();
         if age <= max_age {
             continue;
         }

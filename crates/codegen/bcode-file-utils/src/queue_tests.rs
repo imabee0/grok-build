@@ -4498,7 +4498,6 @@ fn cleanup_orphans_uses_sidecar_age_for_pairs() {
     );
 
     cleanup_queue_dir(&queue_dir, Duration::from_secs(2 * 3600), None);
-
     assert!(keep_tmp.exists(), "fresh-by-sidecar temp kept");
     assert!(keep_sc.exists(), "fresh-by-sidecar sidecar kept");
     assert!(!drop_tmp.exists(), "expired-by-sidecar temp removed");
