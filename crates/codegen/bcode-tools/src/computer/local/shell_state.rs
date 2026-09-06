@@ -92,9 +92,29 @@ dump_bash_state() {
       command base64 <<<"$content" | command tr -d '\n'
       builtin printf '\nBCODE_SNAP_EOF_%s\n' "$var_name"
       builtin printf ')\n'
+      # Strip the export attribute and drop the carrier after replay. A snapshot
+      # that restores `allexport` would otherwise export every carrier assigned
+      # after it -- functions, aliases, options -- so the next dump would encode
+      # the previous dump, and each command's environment would grow until exec
+      # failed with E2BIG.
+      builtin printf 'builtin declare +x bcode_snap_%s 2>/dev/null || true\n' "$var_name"
       builtin printf 'eval "$bcode_snap_%s"\n' "$var_name"
+      builtin printf 'builtin unset bcode_snap_%s 2>/dev/null || true\n' "$var_name"
     fi
   }
+
+  # `allexport` (set -a) exports every assignment, this function's own locals
+  # included -- the env dump, the function dump, each base64 blob. They would
+  # then ride in the environment of every child process the shell runs, and grow
+  # each round as the next dump encoded the last, until exec failed with E2BIG.
+  # The option state is captured first, so the snapshot still restores it for
+  # the user, and switched off for the rest of the dump.
+  #
+  # errexit/pipefail here are this function's own `set -euo pipefail` (set is
+  # shell-global in bash); replaying them would abort later user commands.
+  local posix_opts
+  posix_opts=$(builtin shopt -po 2>/dev/null | command grep -vE '^set [-+]o (nounset|errexit|pipefail)$' || true)
+  builtin set +a
 
   _emit "__BCODE_BASH_STATE_START__"
 
@@ -104,16 +124,6 @@ dump_bash_state() {
   env_vars=$(builtin export -p 2>/dev/null | command grep -viE '_proxy=|BCODE_SANDBOX|BCODE_AGENT=|SUDO_ASKPASS|BCODE_ASKPASS|ELECTRON_RUN_AS_NODE|SSH_AUTH_SOCK|DBUS_SESSION_BUS_ADDRESS|XDG_RUNTIME_DIR|WAYLAND_DISPLAY|GPG_TTY' || true)
   _emit_encoded "$env_vars" "ENV_VARS_B64"
 
-  # errexit/pipefail here are this function's own `set -euo pipefail` (set is
-  # shell-global in bash); replaying them would abort later user commands.
-  local posix_opts
-  posix_opts=$(builtin shopt -po 2>/dev/null | command grep -vE '^set [-+]o (nounset|errexit|pipefail)$' || true)
-  _emit_encoded "$posix_opts" "POSIX_OPTS_B64"
-
-  local bash_opts
-  bash_opts=$(builtin shopt -p 2>/dev/null || true)
-  _emit_encoded "$bash_opts" "BASH_OPTS_B64"
-
   local all_functions
   all_functions=$(builtin declare -f 2>/dev/null || true)
   _emit_encoded "$all_functions" "FUNCTIONS_B64"
@@ -121,6 +131,16 @@ dump_bash_state() {
   local aliases
   aliases=$(builtin alias -p 2>/dev/null || true)
   _emit_encoded "$aliases" "ALIASES_B64"
+
+  # Options last, so replaying a restored `allexport` cannot export the carriers
+  # that come after it. Otherwise a shell with large functions puts its whole
+  # dump in the environment of every child, and each round encodes the last
+  # until exec fails with E2BIG.
+  local bash_opts
+  bash_opts=$(builtin shopt -p 2>/dev/null || true)
+  _emit_encoded "$bash_opts" "BASH_OPTS_B64"
+
+  _emit_encoded "$posix_opts" "POSIX_OPTS_B64"
 
   _emit "# end of bash state dump"
   _emit "__BCODE_BASH_STATE_END__"
@@ -148,9 +168,24 @@ function dump_zsh_state() {
       command base64 <<<"$content" | command tr -d '\n'
       builtin printf '\nBCODE_SNAP_EOF_%s\n' "$var_name"
       builtin printf ')\n'
+      # See the bash script: a restored `allexport` would otherwise export each
+      # carrier and the dumps would nest until exec failed with E2BIG.
+      builtin printf 'builtin typeset +x bcode_snap_%s 2>/dev/null || true\n' "$var_name"
       builtin printf 'eval "$bcode_snap_%s"\n' "$var_name"
+      builtin printf 'builtin unset bcode_snap_%s 2>/dev/null || true\n' "$var_name"
     fi
   }
+
+  # See the bash script: `allexport` would export this function's own locals and
+  # the dumps would nest until exec failed with E2BIG. Options are captured
+  # first so the snapshot still restores the user's `setopt allexport`.
+  #
+  # errreturn/pipefail here are this function's own `emulate -L` options
+  # (setopt lists them while inside); replaying them would abort later user
+  # commands.
+  local zsh_opts
+  zsh_opts=$(setopt 2>/dev/null | command grep -vE '^(nounset|errexit|errreturn|pipefail)$' | command awk '{printf "builtin setopt %s 2>/dev/null || true\n", $0}' || true)
+  builtin unsetopt allexport 2>/dev/null || true
 
   _emit "__BCODE_ZSH_STATE_START__"
 
@@ -160,13 +195,6 @@ function dump_zsh_state() {
   env_vars=$(builtin typeset -xp 2>/dev/null | command grep -viE '_proxy=|BCODE_SANDBOX|BCODE_AGENT=|SUDO_ASKPASS|BCODE_ASKPASS|ELECTRON_RUN_AS_NODE|SSH_AUTH_SOCK|DBUS_SESSION_BUS_ADDRESS|XDG_RUNTIME_DIR|WAYLAND_DISPLAY|GPG_TTY' || true)
   _emit_encoded "$env_vars" "ENV_VARS_B64"
 
-  # errreturn/pipefail here are this function's own `emulate -L` options
-  # (setopt lists them while inside); replaying them would abort later user
-  # commands.
-  local zsh_opts
-  zsh_opts=$(setopt 2>/dev/null | command grep -vE '^(nounset|errexit|errreturn|pipefail)$' | command awk '{printf "builtin setopt %s 2>/dev/null || true\n", $0}' || true)
-  _emit_encoded "$zsh_opts" "ZSH_OPTS_B64"
-
   local all_functions
   all_functions=$(builtin typeset -f 2>/dev/null || true)
   _emit_encoded "$all_functions" "FUNCTIONS_B64"
@@ -174,6 +202,9 @@ function dump_zsh_state() {
   local aliases
   aliases=$({ builtin alias -L; builtin alias -gL; builtin alias -sL } 2>/dev/null || true)
   _emit_encoded "$aliases" "ALIASES_B64"
+
+  # Options last: see the bash script.
+  _emit_encoded "$zsh_opts" "ZSH_OPTS_B64"
 
   _emit "# end of zsh state dump"
   _emit "__BCODE_ZSH_STATE_END__"
