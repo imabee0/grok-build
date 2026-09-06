@@ -393,7 +393,11 @@ fn effective_max_age_precedence() {
     );
 }
 
+/// The prune needs `pin_exists`, which only grove can answer; the published
+/// snapshot stubs it to a constant `false`, so the sweep examines the orphan
+/// and prunes nothing.
 #[test]
+#[ignore = "needs grove: pin_exists is stubbed to false in the published snapshot"]
 fn run_pass_prunes_orphan_grove_pins_after_grace() {
     bcode_test_utils::require_git!();
     use bcode_test_utils::git::{git_commit_all, init_git_repo};

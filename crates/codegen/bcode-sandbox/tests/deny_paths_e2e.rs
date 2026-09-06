@@ -1142,6 +1142,14 @@ fn devbox_genuine_reexec_applies_enforcement() {
     if skip_if_enforcement_unavailable() {
         return;
     }
+    // The devbox profile's whole bwrap plan is the `/data` write-deny (it
+    // carries no deny list and no hook write-deny), so off a devbox host
+    // `bwrap_reexec_for_profile` correctly has nothing to build and returns
+    // None. Nothing to assert here then.
+    if !Path::new("/data").exists() {
+        eprintln!("skipping: no /data, so the devbox profile has no bwrap plan to apply");
+        return;
+    }
     let (home, bcode, workspace, _ch, _cg, _cw) = fixture_homes("devbox-genuine");
     let exe = std::env::current_exe().expect("current_exe");
     let mut cmd = Command::new(exe);
