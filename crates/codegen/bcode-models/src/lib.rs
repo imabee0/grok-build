@@ -9,6 +9,10 @@ use std::sync::LazyLock;
 /// It is `pub` because `bcode_shell::models` re-exports it and `agent::config` reads it.
 pub const DEFAULT_MODELS_JSON: &str = include_str!("../default_models.json");
 
+/// Per-model rates, next to the catalog because they are the same kind of
+/// thing: provider data keyed by wire model id. Parsed by `bcode-pricing`.
+pub const PRICING_TOML: &str = include_str!("../pricing.toml");
+
 #[derive(serde::Deserialize)]
 struct DefaultModels {
     default: String,

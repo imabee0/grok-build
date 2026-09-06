@@ -235,19 +235,40 @@ fn offsets_are_honoured() {
 
 // --- table and formatting ---------------------------------------------------
 
+/// Model ids are wire values and live in the catalog, so this file names none
+/// of them: it asserts the shape of the built-in card instead.
 #[test]
-fn builtin_card_parses_and_ids_with_dots_survive() {
+fn builtin_card_prices_only_models_the_catalog_ships() {
     let t = PricingTable::builtin();
-    for id in [
-        "deepseek-v4-pro",
-        "deepseek-v4-flash",
-        "deepseek-v4-flash-vision-exp",
-        "grok-4.6",
-    ] {
+    let catalog: serde_json::Value =
+        serde_json::from_str(bcode_models::DEFAULT_MODELS_JSON).unwrap();
+    let ids: Vec<&str> = catalog["models"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| m["id"].as_str().unwrap())
+        .collect();
+
+    assert!(!t.pricing.is_empty(), "the built-in card prices nothing");
+    for id in t.pricing.keys() {
         assert!(
-            t.get(id).is_some(),
-            "{id} missing: a dotted id was split by TOML"
+            ids.contains(&id.as_str()),
+            "{id} is priced but not in the catalog, so nothing can ever use the rate"
         );
+    }
+}
+
+/// An unquoted `[pricing.foo-4.6]` is a *nested* table, `pricing.foo-4."6"`,
+/// which prices nothing and fails silently. Every dotted id must survive whole.
+#[test]
+fn ids_with_dots_survive_the_toml_parse() {
+    let t = PricingTable::builtin();
+    assert!(
+        t.pricing.keys().any(|id| id.contains('.')),
+        "no dotted id left to prove the quoting still holds"
+    );
+    for id in t.pricing.keys() {
+        assert!(!id.is_empty() && !id.contains('"'));
     }
 }
 
@@ -297,16 +318,24 @@ fn openai_is_unpriced_rather_than_guessed() {
 
 // --- context-size tiers ----------------------------------------------------
 
+/// Whichever models the card gives a context tier, the threshold is inclusive
+/// and the tier is dearer than the base rate. The numbers themselves are data.
 #[test]
-fn xai_tier_doubles_past_200k() {
+fn every_tiered_model_charges_more_from_its_threshold_on() {
     let t = PricingTable::builtin();
-    let p = t.get("grok-4.6").unwrap();
-    let small = p.rates_for(199_999, Utc::now()).rates;
-    let large = p.rates_for(200_000, Utc::now()).rates;
-    assert_eq!(small.input, 2.00);
-    assert_eq!(large.input, 4.00, "threshold is inclusive at 200k");
-    assert_eq!(large.output, 12.00);
-    assert_eq!(large.cache_read, Some(1.00));
+    let tiered: Vec<_> = t.pricing.values().filter(|p| !p.tier.is_empty()).collect();
+    assert!(!tiered.is_empty(), "no tiered model left to cover");
+
+    for p in tiered {
+        let over = p.tier.iter().map(|t| t.over_tokens).min().unwrap();
+        let below = p.rates_for(over - 1, Utc::now()).rates;
+        let at = p.rates_for(over, Utc::now()).rates;
+        assert_eq!(below.input, p.base.input, "below the threshold is the base");
+        assert!(
+            at.input > below.input && at.output > below.output,
+            "the threshold is inclusive and a tier costs more, not less"
+        );
+    }
 }
 
 #[test]
@@ -366,8 +395,19 @@ fn a_time_window_discounts_the_tier_it_applies_to() {
 fn tier_threshold_uses_the_cache_inclusive_prompt_size() {
     // The provider served the whole context, cached or not, so the tier is
     // chosen on the full prompt rather than on the billable remainder.
-    let t = PricingTable::builtin();
-    let p = t.get("grok-4.6").unwrap();
+    let p: ModelPricing = toml::from_str(
+        r#"
+        input = 2.0
+        output = 6.0
+        cache_read = 0.5
+        [[tier]]
+        over_tokens = 200000
+        input = 4.0
+        output = 12.0
+        cache_read = 1.0
+        "#,
+    )
+    .unwrap();
     let tokens = CallTokens {
         input_tokens: 250_000,
         cache_read_tokens: 240_000, // billable input is only 10k

@@ -29,7 +29,7 @@ shell and its output is read before any push.
 | `crates/codegen/bcode-pager-bin` | Composition root; builds the `bcode` binary. |
 | `crates/codegen/bcode-pager` | TUI: scrollback, prompt, modals, status line. |
 | `crates/codegen/bcode-shell` | Agent runtime, auth, sampling, sessions. |
-| `crates/codegen/bcode-models` | Provider registry and model catalog (data). |
+| `crates/codegen/bcode-models` | Provider data: model catalog and rate card. |
 | `crates/codegen/bcode-tools` | Tool implementations. |
 
 ## Branch model
@@ -44,8 +44,10 @@ single seam, or they will rot against upstream refactors.
 ## Invariants
 
 - **Zero upstream branding.** `make brand` is the gate. Only two exemptions: the
-  provider catalog (endpoints and wire model ids are data) and the licence files
-  (Apache-2.0 §4(c)/(d) requires retaining them).
+  provider data in `crates/codegen/bcode-models/` — `default_models.json` and
+  `pricing.toml`, both keyed by wire model id, both data, neither compiled as
+  code — and the licence files (Apache-2.0 §4(c)/(d) requires retaining them).
+  Tests must not name a provider's model ids: read them from the catalog.
 - **bcode writes only under `~/.bcode`, the workspace, and explicit user
   targets.** Never another tool's directory. Any other agent CLI's home
   directory must be byte-identical after a bcode session.

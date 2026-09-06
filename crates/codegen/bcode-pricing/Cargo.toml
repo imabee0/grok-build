@@ -6,7 +6,11 @@ license = "Apache-2.0"
 authors = ["bcode"]
 
 [dependencies]
+bcode-models = { path = "../bcode-models" }
 chrono = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 toml = { workspace = true }
 tracing = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

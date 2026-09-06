@@ -2316,8 +2316,10 @@ dependencies = [
 name = "bcode-pricing"
 version = "0.1.0"
 dependencies = [
+ "bcode-models",
  "chrono",
  "serde",
+ "serde_json",
  "toml",
  "tracing",
 ]

@@ -2,8 +2,10 @@
 # The zero-branding guarantee.
 #
 # Fails if any upstream identifier survives outside the two allowlisted places:
-#   1. the provider registry / model catalog, where endpoints and wire model ids
-#      are legitimately data (see the plan, "Branding vs. providers");
+#   1. the two provider data files in crates/codegen/bcode-models/ - the model
+#      catalog and the rate table - where endpoints and wire model ids are
+#      legitimately data (see the plan, "Branding vs. providers"). The code in
+#      that crate is NOT exempt;
 #   2. LICENSE / NOTICE / THIRD-PARTY-NOTICES, which Apache-2.0 s4(c)/(d)
 #      requires a derivative work to retain.
 #
@@ -23,9 +25,11 @@ ALLOW=(
   ':(exclude)LICENSE'
   ':(exclude)NOTICE'
   ':(exclude)THIRD-PARTY-NOTICES'
-  # Provider registry / model catalog: endpoints and wire model ids are data.
-  # Delete a provider's rows and the tree has literal zero occurrences.
+  # Provider data: the model catalog and the rate table, both keyed by wire
+  # model id and both endpoint-bearing. One directory, no code in it: delete a
+  # provider's rows and the tree has literal zero occurrences.
   ':(exclude)crates/codegen/bcode-models/default_models.json'
+  ':(exclude)crates/codegen/bcode-models/pricing.toml'
   # The fork's own machinery: rename rules must name what they replace, and the
   # coexistence test must name the CLIs whose directories it protects.
   ':(exclude)tools/'

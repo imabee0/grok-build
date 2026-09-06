@@ -231,7 +231,10 @@ impl ModelPricing {
                 window: Some(i),
             };
         }
-        EffectiveRates { rates: base, window: None }
+        EffectiveRates {
+            rates: base,
+            window: None,
+        }
     }
 
     /// Cost of one call in USD ticks, priced at the rate in force when it was
@@ -293,7 +296,7 @@ pub struct PricingTable {
 impl PricingTable {
     /// Built-in rate card. Overridden per model by `[pricing.<id>]` in config.
     pub fn builtin() -> Self {
-        toml::from_str(include_str!("../pricing.toml")).expect("built-in pricing.toml is malformed")
+        toml::from_str(bcode_models::PRICING_TOML).expect("built-in pricing.toml is malformed")
     }
 
     pub fn get(&self, model_id: &str) -> Option<&ModelPricing> {
