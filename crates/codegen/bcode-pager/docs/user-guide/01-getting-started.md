@@ -1,6 +1,6 @@
 # Getting Started
 
-bcode is a terminal-based AI coding assistant from bcode. It runs as a TUI (Terminal User Interface) that understands your codebase, executes shell commands, edits files, searches the web, and manages tasks.
+Bcode is a terminal coding agent. It runs as a TUI that reads your codebase, runs shell commands, edits files and manages tasks, against whichever model provider you configure.
 
 You can use it interactively as a full-screen TUI, run it headlessly for scripting and CI/CD, or integrate it into editors via the Agent Client Protocol (ACP).
 
@@ -8,46 +8,26 @@ You can use it interactively as a full-screen TUI, run it headlessly for scripti
 
 ## Installation
 
-Install the latest stable release (macOS, Linux, or Windows via Git Bash):
+Build from source. There is no hosted installer and no auto-update: the binary
+you run is the one you built.
 
 ```bash
-curl -fsSL https://bcode.invalid/cli/install.sh | bash
+git clone <this repository> && cd bcode
+make build                 # cargo build -p bcode-pager-bin --release
 ```
 
-Install a specific version:
+The toolchain is pinned by `rust-toolchain.toml`, and the build needs `protoc`
+on `PATH`. The binary lands at `target/release/bcode`; put it wherever you keep
+your own tools, or run it in place.
+
+Verify:
 
 ```bash
-curl -fsSL https://bcode.invalid/cli/install.sh | bash -s 0.1.42
+target/release/bcode --version
 ```
 
-On **Windows (PowerShell)**, use the native PowerShell installer:
-
-```powershell
-irm https://bcode.invalid/cli/install.ps1 | iex
-```
-
-Install a specific version:
-
-```powershell
-$env:BCODE_VERSION="0.1.42"; irm https://bcode.invalid/cli/install.ps1 | iex
-```
-
-The PowerShell installer automatically adds `%USERPROFILE%\.bcode\bin` to your User PATH. Alternatively, install via [Git for Windows](https://gitforwindows.org/) (Git Bash) or MSYS2 using the bash script above. WSL users get the Linux binary automatically.
-
-Verify the installation:
-
-```bash
-bcode --version
-```
-
-Update to the latest version at any time:
-
-```bash
-bcode update
-```
-
-To fetch a repository through Grove (NFS on macOS, FUSE on Linux) after
-`[clone] enabled = true` in Grove config:
+To fetch a repository into a projected working tree (NFS on macOS, FUSE on
+Linux) after `[clone] enabled = true`:
 
 ```bash
 bcode clone <url> [dir]
@@ -66,16 +46,21 @@ Start Bcode by running:
 bcode
 ```
 
-On first launch, Bcode opens your browser to authenticate with bcode.invalid. After you sign in, Bcode stores your credentials in `~/.bcode/auth.json`, where they persist across sessions. Bcode refreshes your credentials automatically and prompts you to sign in again when they can no longer be renewed.
-
-If you prefer API key authentication (e.g., for CI/CD or environments without a browser), set the `BCODE_API_KEY` environment variable instead:
+Bcode talks to whichever provider you configure, and to nothing else. Give it a
+key for one of them and it starts:
 
 ```bash
-export BCODE_API_KEY="bcode-..."
+export DEEPSEEK_API_KEY="sk-..."      # or whichever key your model names
 bcode
 ```
 
-See [Authentication](02-authentication.md) for the full set of auth options including OIDC, external auth providers, and device code flow.
+Each model in the catalog names the variable its provider reads, so several
+providers can be configured at once and `/model` switches between them.
+Credentials Bcode stores itself live in `~/.bcode/`, and nothing is written
+outside that directory, your workspace, and paths you name.
+
+See [Authentication](02-authentication.md) for the full set of auth options
+including OIDC, external auth providers, and device code flow.
 
 ---
 
@@ -161,7 +146,7 @@ Tools can be extended with [MCP servers](05-configuration.md#mcp-servers) for in
 Type `/` in the prompt to access commands. These provide quick actions without writing a full prompt:
 
 ```
-/model bcode-4.6                 # Switch model
+/model deepseek-v4-pro                 # Switch model
 /compact                          # Compress conversation history
 /always-approve                   # Toggle always-approve mode
 /new                              # Start a new session
@@ -196,7 +181,7 @@ bcode --rules "Always use TypeScript. Prefer functional components."
 bcode --yolo
 
 # Use a specific model
-bcode -m bcode-4.6
+bcode -m deepseek-v4-pro
 
 # Resume a previous session
 bcode --resume <session-id>

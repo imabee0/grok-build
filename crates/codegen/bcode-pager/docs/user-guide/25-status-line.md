@@ -130,7 +130,7 @@ printf '%b\n' "${DIR##*/} │ $MODEL │ ${PCT}% ctx │ \033[32m$BRANCH\033[0m 
 
 ## Tips
 
-- Test with mock input: `echo '{"session_id":"t","workspace":{"current_dir":"/tmp/demo"},"model":{"display_name":"Bcode 4.5"},"context_window":{"used_percentage":25}}' | ./statusline.sh`
+- Test with mock input: `echo '{"session_id":"t","workspace":{"current_dir":"/tmp/demo"},"model":{"display_name":"DeepSeek V4 Flash"},"context_window":{"used_percentage":25}}' | ./statusline.sh`
 - Cache slow commands such as `git status` to a temp file keyed on `session_id`, refreshed every few seconds. `session_id` is stable per session and unique across sessions.
 - Use `printf '%b'` rather than `echo -e` for reliable escapes.
 

@@ -247,7 +247,7 @@ explore = true                       # default -- omit to keep enabled
 plan = false                         # disable the plan subagent
 
 [subagents.models]
-explore = "bcode-4.6"                 # route explore to a specific model
+explore = "deepseek-v4-pro"                 # route explore to a specific model
 ```
 
 Per-type model overrides apply for any parent. Without an override, a subagent inherits the parent's model.
@@ -260,7 +260,7 @@ Define custom roles with their own capability and model defaults:
 [subagents.roles.researcher]
 description = "Deep research agent"
 default_capability_mode = "read-only"
-model = "bcode-4.6"
+model = "deepseek-v4-pro"
 prompt_file = ".bcode/prompts/researcher.md"
 ```
 
@@ -297,7 +297,7 @@ Subagents appear in several places in the interactive TUI:
 
 When a subagent is spawned, a compact lifecycle block is added to the *parent's* scrollback:
 
-- `Subagent running: "do the thing" (Implementer · bcode-4.6) · Thinking`
+- `Subagent running: "do the thing" (Implementer · deepseek-v4-pro) · Thinking`
 - Or for background subagents: `Subagent started: "..."`
 
 While running, the block shows a live activity suffix (e.g. "Running: cargo test", "Compacting", "Retrying (2/3)") pulled from the child's turn tracker. The bullet animates (or is colored) according to state.

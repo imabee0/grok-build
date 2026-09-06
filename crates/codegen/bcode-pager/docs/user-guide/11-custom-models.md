@@ -6,7 +6,7 @@ Bcode connects to custom model endpoints for alternative providers, self-hosted 
 
 ## Default Models
 
-By default, Bcode uses models hosted by bcode, and new sessions start with `bcode-4.5`. Default models require no configuration. Authenticate with `bcode login` or an API key, then start a session.
+Bcode hosts no models. It ships a catalog of provider entries — DeepSeek, OpenAI and others — each naming its endpoint and the environment variable holding its key, and new sessions start with `deepseek-v4-pro`. Export a key for the provider you want and start a session; no other configuration is needed.
 
 List all available models:
 
@@ -21,7 +21,7 @@ bcode models
 ### CLI Flag
 
 ```bash
-bcode -p "Hello" -m bcode-4.6
+bcode -p "Hello" -m deepseek-v4-pro
 ```
 
 ### Slash Command
@@ -29,13 +29,13 @@ bcode -p "Hello" -m bcode-4.6
 In the TUI, switch models during a session:
 
 ```
-/model bcode-4.6
+/model deepseek-v4-pro
 ```
 
 Or use the alias:
 
 ```
-/m bcode-4.6
+/m deepseek-v4-pro
 ```
 
 ### Model Picker (Ctrl+M)
@@ -48,8 +48,8 @@ Enterprise hosts can pin the **selectable** set — not only the default — in 
 
 ```toml
 [models]
-default = "bcode-4.5"
-allowed_models = ["bcode-4.5", "bcode-4*"]
+default = "deepseek-v4-flash"
+allowed_models = ["deepseek-v4-flash", "deepseek-*"]
 ```
 
 A fleet pin matches the **model id** (not a user-chosen catalog key), so a local `[model.<name>]` entry cannot widen the set. User-config `allowed_models` still matches catalog key or model id. Omit the key to leave user config standing. An empty array is unrestricted. A present-but-unreadable pin fail-closes (nothing selectable). A default or `-m` value outside the pinned set is rejected once the model catalog is fetched — contact your administrator; the list is not user-editable.
@@ -60,7 +60,7 @@ Set a persistent default in `~/.bcode/config.toml`:
 
 ```toml
 [models]
-default = "bcode-4.5"
+default = "deepseek-v4-flash"
 ```
 
 ---
@@ -184,11 +184,11 @@ You can override specific fields of built-in models without redefining everythin
 
 ```toml
 # Override only the API key for a default model
-[model.bcode-4.6]
+[model.deepseek-v4-pro]
 api_key = "my-api-key"
 
 # Override temperature and add a custom API key
-[model.bcode-4.6]
+[model.deepseek-v4-pro]
 temperature = 0.5
 api_key = "sk-custom"
 ```
@@ -310,7 +310,7 @@ bcode
 models_base_url = "https://api.acme.com/v1"
 
 # Override only the API key for a specific model
-[model.bcode-4.6]
+[model.deepseek-v4-pro]
 api_key = "my-api-key"
 ```
 
@@ -328,13 +328,13 @@ The `web_search` tool uses a separate model. Configure it with:
 
 ```toml
 [models]
-web_search = "bcode-4.5"
+web_search = "deepseek-v4-flash"
 ```
 
 Or via environment variable:
 
 ```bash
-export BCODE_WEB_SEARCH_MODEL="bcode-4.5"
+export BCODE_WEB_SEARCH_MODEL="deepseek-v4-flash"
 ```
 
 If you point web search at a custom model, you also need a `[model.*]` entry so Bcode can reach it. Server-side ("backend") web search runs only when the model sets `supports_backend_search = true` (and the build enables backend search); it does not depend on `api_backend`:
@@ -386,9 +386,9 @@ auth_token_ttl = 3600
 default = "company-bcode"
 
 [model.company-bcode]
-model = "bcode-4.6"
+model = "deepseek-v4-pro"
 base_url = "https://bcode-proxy.acme.com/"
-name = "Bcode 4.6 (Proxy)"
+name = "DeepSeek V4 Pro (Proxy)"
 context_window = 128000
 
 [features]

@@ -46,11 +46,11 @@ Location: `~/.bcode/config.toml`. If the file is missing, Bcode uses its built-i
 auto_update = true                     # check for updates on launch
 
 [models]
-default = "bcode-4.5"                   # model used for new sessions
-web_search = "bcode-4.5"                # model used by the web_search tool
+default = "deepseek-v4-flash"                   # model used for new sessions
+web_search = "deepseek-v4-flash"                # model used by the web_search tool
 # Optional picker allowlist (globs on catalog key or model id). Empty = unrestricted.
 # A signed policy pin replaces this list (model id only) and cannot be widened from here.
-# allowed_models = ["bcode-4.5", "bcode-4*"]
+# allowed_models = ["deepseek-v4-flash", "deepseek-*"]
 
 # Defaults applied to every model; a per-model [model.<id>] value always wins.
 # See "Custom Models" for the per-model overrides and full details.
@@ -221,7 +221,7 @@ allow_local = false                            # true = allow localhost / 127.0.
 
 [toolset.web_search]
 # Restrict web_search to these domains (max 5). Mutually exclusive with excluded_domains.
-allowed_domains = ["docs.invalid", "arxiv.org"]
+allowed_domains = ["docs.bcode.invalid", "arxiv.org"]
 # ...or block these domains instead (leave allowed_domains unset):
 # excluded_domains = ["reddit.com", "pinterest.com"]
 ```
@@ -274,7 +274,7 @@ Credential resolution: `api_key` > `env_key` > signed-in session token > `BCODE_
 To override a built-in model, use its name as the section key and set only the fields you need:
 
 ```toml
-[model.bcode-4.6]
+[model.deepseek-v4-pro]
 api_key = "my-api-key"
 ```
 
@@ -348,7 +348,7 @@ explore = true                        # enable/disable specific types
 plan = false
 
 [subagents.models]
-explore = "bcode-4.6"               # route to different models
+explore = "deepseek-v4-pro"               # route to different models
 ```
 
 To pin the model a subagent uses, set its entry under `[subagents.models]`.
@@ -638,9 +638,9 @@ auth_token_ttl = 3600
 default = "company-bcode"
 
 [model.company-bcode]
-model = "bcode-4.6"
+model = "deepseek-v4-pro"
 base_url = "https://bcode-proxy.acme.com/"
-name = "Bcode 4.6 (Proxy)"
+name = "DeepSeek V4 Pro (Proxy)"
 context_window = 128000
 
 [features]
@@ -760,7 +760,7 @@ The key ones. See the README for the complete list.
 
 | Variable | Description |
 |----------|-------------|
-| `BCODE_API_KEY` | API key from console.invalid |
+| `BCODE_API_KEY` | API key from console.bcode.invalid |
 | `BCODE_AUTH_PROVIDER_COMMAND` | External auth binary path |
 | `BCODE_AUTH_PROVIDER_LABEL` | Display name on TUI login screen |
 | `BCODE_AUTH_TOKEN_TTL` | Token lifetime in seconds |

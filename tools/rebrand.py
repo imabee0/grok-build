@@ -22,12 +22,20 @@ ROOT = Path(__file__).resolve().parent.parent
 def load_rules():
     with open(ROOT / "tools" / "rebrand.toml", "rb") as fh:
         cfg = tomllib.load(fh)
-    rules = [(r["from"], r["to"]) for r in cfg["rule"]]
+    rules = [(r["from"], r["to"], tuple(r.get("paths", ()))) for r in cfg["rule"]]
     return rules, cfg["skip_paths"], cfg["binary_exts"], cfg.get("skip_content", [])
 
 
-def apply(text: str, rules: list[tuple[str, str]]) -> str:
-    for src, dst in rules:
+def apply(text: str, rules, rel: str | None = None) -> str:
+    """Rewrite `text` by every rule that applies to `rel`.
+
+    A rule carrying `paths` applies only to file contents under one of those
+    prefixes; `rel` is None when rewriting a path name, where such a rule never
+    applies.
+    """
+    for src, dst, paths in rules:
+        if paths and not (rel is not None and rel.startswith(paths)):
+            continue
         if src in text:
             text = text.replace(src, dst)
     return text
@@ -76,7 +84,7 @@ def main() -> int:
             text = raw.decode("utf-8")
         except UnicodeDecodeError:
             continue  # binary by content
-        new = apply(text, rules)
+        new = apply(text, rules, rel)
         if new != text:
             content_changed += 1
             if not args.check:

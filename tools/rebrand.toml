@@ -10,7 +10,13 @@
 # (see tools/verify-no-upstream-brand.sh).
 skip_paths = [
   ".git/",
+  # Build output: not source, and large enough that walking it is the slowest
+  # thing the codemod would do.
+  "target/",
   "tools/",
+  # Host-specific notes about the machine's other installs, by definition about
+  # tools this codemod must not rename away.
+  "CLAUDE.local.md",
   "Makefile",
   "AGENTS.md",
   "CLAUDE.md",
@@ -23,50 +29,52 @@ skip_paths = [
 # Contents preserved, but the path is still renamed. The provider registry and
 # model catalog holds endpoints and wire model ids as data (see the brand gate).
 skip_content = [
-  "crates/codegen/xai-grok-models/default_models.json",
-  "crates/codegen/bcode-models/default_models.json",
+  "crates/codegen/xai-grok-models/",
+  "crates/codegen/bcode-models/",
 ]
 
 # Binary file extensions: renamed on disk but never content-rewritten.
 binary_exts = [".png", ".jpg", ".jpeg", ".gif", ".ico", ".webp", ".zip", ".gz", ".woff", ".woff2", ".ttf", ".otf", ".pdf", ".wasm"]
 
 # --- Endpoints and domains -------------------------------------------------
-# Rewritten to placeholders that fail loudly rather than silently pointing at a
-# plausible-looking domain. Real provider endpoints are reintroduced as catalog
-# data (plan section 4); these call-home hosts are removed outright (section 3).
+# Rewritten under one guaranteed-unresolvable domain (RFC 2606 reserves
+# `.invalid`), keeping upstream's subdomain structure so the host predicates
+# that key on it ("is this our own endpoint?") stay coherent: nothing is ours,
+# and nothing resolves. Real provider endpoints are reintroduced as catalog data
+# (plan section 4); these call-home hosts are removed outright (section 3).
 [[rule]]
 from = "cli-chat-proxy.grok.com"
-to   = "cli-chat-proxy.invalid"
+to   = "cli-chat-proxy.bcode.invalid"
 [[rule]]
 from = "assets.grok.com"
-to   = "assets.invalid"
+to   = "assets.bcode.invalid"
 [[rule]]
 from = "code.grok.com"
-to   = "code.invalid"
+to   = "code.bcode.invalid"
 [[rule]]
 from = "accounts.x.ai"
-to   = "accounts.invalid"
+to   = "accounts.bcode.invalid"
 [[rule]]
 from = "auth.x.ai"
-to   = "auth.invalid"
+to   = "auth.bcode.invalid"
 [[rule]]
 from = "api.x.ai"
-to   = "api.invalid"
+to   = "api.bcode.invalid"
 [[rule]]
 from = "API.X.AI"
-to   = "API.INVALID"
+to   = "API.BCODE.INVALID"
 [[rule]]
 from = "X.AI"
 to   = "BCODE.INVALID"
 [[rule]]
 from = "console.x.ai"
-to   = "console.invalid"
+to   = "console.bcode.invalid"
 [[rule]]
 from = "media.x.ai"
-to   = "media.invalid"
+to   = "media.bcode.invalid"
 [[rule]]
 from = "docs.x.ai"
-to   = "docs.invalid"
+to   = "docs.bcode.invalid"
 [[rule]]
 from = "grok.com"
 to   = "bcode.invalid"
@@ -77,6 +85,32 @@ to   = "bcode.invalid"
 [[rule]]
 from = "ai.x.grok"
 to   = "dev.bcode.cli"
+
+# --- Example model ids (documentation only) ---------------------------------
+# The user guide teaches by example, and an example naming a model this fork
+# cannot reach teaches the wrong thing. These rules are scoped to the guide, so
+# the same ids stay untouched where they are arbitrary fixtures in code. The
+# catalog itself is in `skip_content`; its wire ids are data.
+[[rule]]
+paths = ["crates/codegen/xai-grok-pager/docs/", "crates/codegen/bcode-pager/docs/"]
+from = "grok-4*"
+to   = "deepseek-*"
+[[rule]]
+paths = ["crates/codegen/xai-grok-pager/docs/", "crates/codegen/bcode-pager/docs/"]
+from = "grok-4.6"
+to   = "deepseek-v4-pro"
+[[rule]]
+paths = ["crates/codegen/xai-grok-pager/docs/", "crates/codegen/bcode-pager/docs/"]
+from = "grok-4.5"
+to   = "deepseek-v4-flash"
+[[rule]]
+paths = ["crates/codegen/xai-grok-pager/docs/", "crates/codegen/bcode-pager/docs/"]
+from = "Grok 4.6"
+to   = "DeepSeek V4 Pro"
+[[rule]]
+paths = ["crates/codegen/xai-grok-pager/docs/", "crates/codegen/bcode-pager/docs/"]
+from = "Grok 4.5"
+to   = "DeepSeek V4 Flash"
 
 # --- Crate and module identifiers ------------------------------------------
 [[rule]]

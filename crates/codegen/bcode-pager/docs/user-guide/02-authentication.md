@@ -30,11 +30,11 @@ To switch accounts or resolve an authentication problem, run:
 bcode login
 ```
 
-Running `bcode login` starts the sign-in flow again, replacing your cached session. By default, it opens your browser and signs in through bcode OAuth at `auth.invalid`. Pass a flag to select a different flow:
+Running `bcode login` starts the sign-in flow again, replacing your cached session. By default, it opens your browser and signs in through bcode OAuth at `auth.bcode.invalid`. Pass a flag to select a different flow:
 
 | Flag | Description |
 |------|-------------|
-| `--oauth` | Sign in through bcode OAuth at `auth.invalid`. This is the default, so the flag is optional. |
+| `--oauth` | Sign in through bcode OAuth at `auth.bcode.invalid`. This is the default, so the flag is optional. |
 | `--device-auth` (alias `--device-code`) | Sign in with the device-code flow for headless or remote environments. |
 
 To sign out, run `bcode logout`. It takes no flags and clears your cached credentials.
@@ -43,7 +43,7 @@ To sign out, run `bcode logout`. It takes no flags and clears your cached creden
 
 ## API Key
 
-For CI/CD, automation, or environments without browser access, use an API key from [console.invalid](https://console.invalid):
+For CI/CD, automation, or environments without browser access, use an API key from [console.bcode.invalid](https://console.bcode.invalid):
 
 ```bash
 export BCODE_API_KEY="bcode-..."
@@ -313,7 +313,7 @@ which `/privacy` opens — does not change these config knobs:
 
 On team accounts, only a team admin can change coding-data sharing.
 Team admins can also enable or disable Zero Data Retention (ZDR) for their team.
-See [How to enable ZDR](https://docs.invalid/developers/faq/security#how-to-enable-zdr).
+See [How to enable ZDR](https://docs.bcode.invalid/developers/faq/security#how-to-enable-zdr).
 When ZDR is on, coding-data sharing cannot be changed at all — the settings
 row shows `ZDR` in place of the value. ZDR does not turn off external OTEL
 or `user.email` — see [ZDR and this stream](24-monitoring-usage.md#zdr-and-this-stream).
