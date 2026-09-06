@@ -1606,7 +1606,21 @@ mod tests {
             let report = maybe_auto_gc(&db, &rebuild_opts()).unwrap();
             assert_eq!(report.outcome, AutoGcOutcome::Ran, "{case}");
             if dead_source {
-                assert_eq!(report.gc.as_ref().unwrap().dead_removed, 1, "{case}");
+                // Count only what this test planted. BCODE_HOME is
+                // process-global, so a concurrent test's `open_default` writer
+                // can add rows to this very DB -- the sibling integration
+                // tests filter for the same reason.
+                assert!(
+                    report.gc.as_ref().unwrap().dead_removed >= 1,
+                    "{case}: the dead row must be removed"
+                );
+                assert!(
+                    db.list(&ListFilter::default())
+                        .unwrap()
+                        .iter()
+                        .all(|r| r.id != id),
+                    "{case}: the dead row must be gone from the db"
+                );
             }
             assert!(
                 report.stale_registrations_cleaned >= 1,
