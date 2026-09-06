@@ -3743,7 +3743,16 @@ fn default_models(endpoints: &EndpointsConfig) -> IndexMap<String, ModelEntryCon
                     .base_url
                     .clone()
                     .unwrap_or_else(|| endpoints.resolve_inference_base_url()),
-                api_base_url: Some(endpoints.bcode_api_base_url.clone()),
+                // Only where the catalog names no endpoint of its own. An entry
+                // that does is a provider row, and its host is the only host it
+                // may talk to: the API-key alternate is upstream's dual-endpoint
+                // split (session to the proxy, key to the first-party API), and
+                // applying it here would send a DeepSeek model's request
+                // somewhere else the moment a stray `BCODE_API_KEY` is set.
+                api_base_url: m
+                    .base_url
+                    .is_none()
+                    .then(|| endpoints.bcode_api_base_url.clone()),
                 name: m.name,
                 description: m.description,
                 context_window,

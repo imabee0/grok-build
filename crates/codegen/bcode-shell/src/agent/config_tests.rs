@@ -307,7 +307,9 @@ fn resolve_runtime_fields_propagates_disable_web_search() {
     let empty: toml::Value = toml::Value::Table(toml::map::Map::new());
     let mut cfg = Config::new_from_toml_cfg(&empty).unwrap();
     cfg.resolve_runtime_fields(&ctx(&empty, false));
-    assert!(!cfg.disable_web_search);
+    // Web search is off by default here: upstream's ran against its own hosted
+    // search, billed to the user's account with that vendor.
+    assert!(cfg.disable_web_search);
     let mut cfg = Config::new_from_toml_cfg(&empty).unwrap();
     cfg.resolve_runtime_fields(&ctx(&empty, true));
     assert!(cfg.disable_web_search);
@@ -1184,32 +1186,25 @@ fn sampling_config_scopes_no_inline_citations_include() {
         );
     }
 }
+/// Every catalog entry carries its own provider endpoint, and no credential
+/// redirects a request away from it: this fork has no proxy of its own, so the
+/// host a model names is the host it talks to.
 #[test]
-fn default_models_dual_endpoint_routing() {
+fn catalog_models_route_to_their_own_provider() {
     let endpoints = EndpointsConfig::default();
     for (model_id, entry) in default_model_entries(&endpoints) {
-        if entry.api_base_url.is_none() {
-            continue;
+        let expected = entry.info().base_url.clone();
+        assert!(
+            !expected.is_empty(),
+            "{model_id}: catalog entry has no endpoint"
+        );
+        for session in [Some("tok"), None] {
+            assert_eq!(
+                resolve_credentials(&entry, session).base_url,
+                expected,
+                "{model_id}: credentials must not move the request off its provider"
+            );
         }
-        let session_creds = resolve_credentials(&entry, Some("tok"));
-        assert_eq!(
-            session_creds.base_url,
-            endpoints.proxy_url(),
-            "{model_id}: SessionToken must route to cli-chat-proxy"
-        );
-        let api_key_creds = ResolvedCredentials {
-            api_key: Some("key".into()),
-            base_url: entry
-                .api_base_url
-                .clone()
-                .unwrap_or(entry.info().base_url.clone()),
-            auth_type: bcode_chat_state::AuthType::ApiKey,
-            auth_scheme: AuthScheme::Bearer,
-        };
-        assert_eq!(
-            api_key_creds.base_url, endpoints.bcode_api_base_url,
-            "{model_id}: ExternalApiKey must route to api.bcode.invalid"
-        );
     }
 }
 #[test]
@@ -1668,8 +1663,8 @@ fn user_override_adds_api_key_to_default_model() {
     assert_eq!(model.api_key, Some("user-custom-api-key".to_string()));
     assert_eq!(model.info.model, dm);
     assert_eq!(
-        model.info.base_url, "https://cli-chat-proxy.bcode.invalid/v1",
-        "base_url should inherit from default, not be stale"
+        model.info.base_url, "https://api.deepseek.com/v1",
+        "base_url should inherit from the catalog row, not be stale"
     );
 }
 #[test]
@@ -3114,7 +3109,8 @@ fn e2e_user_overrides_default_model_with_api_key() {
     let model = models.get(dm).expect("model should exist");
     assert_eq!(model.info.base_url, "https://my-proxy.example.com/v1");
     assert_eq!(model.api_key.as_deref(), Some("my-custom-api-key"));
-    assert!(model.env_key.is_none());
+    // The catalog row's `env_key` survives as a fallback; an explicit `api_key`
+    // outranks it, which the sampling assertions below check.
     let sampling = resolve_sampling(model, Some("session-token"));
     assert_eq!(
         sampling.api_key.as_deref(),
@@ -3181,21 +3177,27 @@ fn config_models_default_custom_model_is_in_resolved_model_list() {
     assert_eq!(model.info.base_url, "https://inference.example.com/v1");
 }
 #[test]
-fn e2e_default_model_with_session_routes_to_proxy() {
+/// The default model is a third-party provider row, and a session bearer is
+/// issued by this product's own login. It must not ride along to that provider.
+fn e2e_session_token_is_never_offered_to_a_third_party_provider() {
     let (_, models) = resolve_models_from_toml("", None);
     let model = models
         .get(crate::models::default_model())
         .expect("default model should exist");
     let sampling = resolve_sampling(model, Some("session-token-123"));
-    assert_eq!(sampling.api_key.as_deref(), Some("session-token-123"));
-    assert_eq!(
-        sampling.base_url, "https://cli-chat-proxy.bcode.invalid/v1",
-        "session auth should route to cli-chat-proxy, not api.bcode.invalid"
+    assert_ne!(
+        sampling.api_key.as_deref(),
+        Some("session-token-123"),
+        "the session bearer must not be sent to {}",
+        sampling.base_url
     );
+    assert_eq!(sampling.base_url, model.info.base_url);
 }
 #[test]
 #[serial]
-fn e2e_default_model_with_external_api_key_routes_to_api_bcode() {
+/// A generic key in the environment is still a key for the model's own
+/// provider: it must not move the request to some other host.
+fn e2e_default_model_with_external_api_key_stays_on_its_provider() {
     let (_, models) = resolve_models_from_toml("", None);
     let model = models
         .get(crate::models::default_model())
@@ -3203,10 +3205,7 @@ fn e2e_default_model_with_external_api_key_routes_to_api_bcode() {
     unsafe { std::env::set_var("BCODE_API_KEY", "bcode-external-key") };
     let sampling = resolve_sampling(model, None);
     assert_eq!(sampling.api_key.as_deref(), Some("bcode-external-key"));
-    assert_eq!(
-        sampling.base_url, "https://api.bcode.invalid/v1",
-        "external API key should route to api.bcode.invalid via api_base_url"
-    );
+    assert_eq!(sampling.base_url, model.info.base_url);
     unsafe { std::env::remove_var("BCODE_API_KEY") };
 }
 #[test]
@@ -3269,9 +3268,10 @@ fn e2e_credential_priority_model_key_beats_session_beats_env() {
         sampling.base_url, "https://custom.api/v1",
         "model's own base_url must be used"
     );
+    // A first-party base URL: the session bearer is only offered to those.
     let model_no_key = test_model_entry(
         "test",
-        "https://proxy.api/v1",
+        "https://cli-chat-proxy.bcode.invalid/v1",
         None,
         None,
         Some("https://api.bcode.invalid/v1"),
@@ -3283,7 +3283,7 @@ fn e2e_credential_priority_model_key_beats_session_beats_env() {
         "session token should beat env key when model has no own credentials"
     );
     assert_eq!(
-        sampling.base_url, "https://proxy.api/v1",
+        sampling.base_url, "https://cli-chat-proxy.bcode.invalid/v1",
         "session auth should use base_url, not api_base_url"
     );
     let sampling = resolve_sampling(&model_no_key, None);
@@ -3334,8 +3334,10 @@ fn e2e_duplicate_model_field_both_entries_survive() {
     assert_eq!(sampling.api_key.as_deref(), Some("enterprise-key"));
     assert_eq!(sampling.base_url, "https://inference.example.com/v1");
     let sampling = resolve_sampling(default, Some("session-key"));
-    assert_eq!(sampling.api_key.as_deref(), Some("session-key"));
-    assert_eq!(sampling.base_url, "https://cli-chat-proxy.bcode.invalid/v1",);
+    assert_eq!(
+        sampling.base_url, default.info.base_url,
+        "the catalog row keeps its own provider endpoint"
+    );
 }
 #[test]
 fn e2e_enterprise_custom_endpoint_skips_bcode_defaults() {
@@ -3427,25 +3429,18 @@ fn e2e_enterprise_endpoints_plus_partial_model_override() {
         None,
     );
     let model = models.get(dm).expect("model should exist");
-    assert_eq!(
-        model.info.base_url, "https://enterprise-proxy.acme.com/v1",
-        "base_url must inherit from [endpoints], not stale default"
-    );
+    // A partial override adds the key without moving the host: the catalog row
+    // names its provider, and `[endpoints]` does not reach it.
+    assert_eq!(model.info.base_url, "https://api.deepseek.com/v1");
     assert_eq!(model.api_key.as_deref(), Some("acme-api-key"));
-    assert_eq!(
-        model.api_base_url.as_deref(),
-        Some("https://enterprise-api.acme.com/v1"),
-    );
+    assert_eq!(model.api_base_url, None);
     let sampling = resolve_sampling(model, Some("session-token"));
     assert_eq!(
         sampling.api_key.as_deref(),
         Some("acme-api-key"),
         "model's own api_key must beat session token"
     );
-    assert_eq!(
-        sampling.base_url, "https://enterprise-proxy.acme.com/v1",
-        "sampling must route to enterprise proxy"
-    );
+    assert_eq!(sampling.base_url, "https://api.deepseek.com/v1");
 }
 #[test]
 fn e2e_enterprise_endpoints_only_no_model_override() {
@@ -3460,15 +3455,12 @@ fn e2e_enterprise_endpoints_only_no_model_override() {
     let model = models
         .get(crate::models::default_model())
         .expect("model should exist");
-    assert_eq!(
-        model.info.base_url, "https://enterprise-proxy.acme.com/v1",
-        "default model should use enterprise cli_chat_proxy_base_url"
-    );
-    assert_eq!(
-        model.api_base_url.as_deref(),
-        Some("https://enterprise-api.acme.com/v1"),
-        "default model should use enterprise bcode_api_base_url"
-    );
+    // `[endpoints]` describes this product's own endpoints, and the default
+    // model is a third-party provider row: it names its own host and keeps it.
+    // An enterprise gateway is configured per model, with `[model.<id>]
+    // base_url`, which the override test below covers.
+    assert_eq!(model.info.base_url, "https://api.deepseek.com/v1");
+    assert_eq!(model.api_base_url, None);
 }
 /// Unset every env var that `EndpointsConfig::default()` reads for endpoints.
 /// The cli-chat-proxy resolver tests below are then deterministic regardless of the ambient environment.
@@ -4347,15 +4339,21 @@ fn imagine_tools_disabled_gates_image_edit() {
     let off = with_list(vec!["image_edit"]).resolve_image_edit();
     assert!(!off.value);
     assert_eq!(off.source, ConfigSource::Remote);
+    unsafe { std::env::set_var("BCODE_IMAGE_EDIT", "1") };
+    assert!(
+        with_list(vec!["image_to_video"]).resolve_image_edit().value,
+        "a remote list naming another tool must not gate this one"
+    );
     unsafe { std::env::remove_var("BCODE_IMAGE_EDIT") };
-    assert!(with_list(vec!["image_to_video"]).resolve_image_edit().value);
-    assert!(Config::default().resolve_image_edit().value);
+    // Off unless asked for: image editing is not coding work, and its tool
+    // definitions cost context on every call.
+    assert!(!Config::default().resolve_image_edit().value);
 }
 #[test]
 #[serial]
 fn resolve_image_gen_gates() {
     unsafe { std::env::remove_var("BCODE_IMAGE_GEN") };
-    assert!(Config::default().resolve_image_gen().value);
+    assert!(!Config::default().resolve_image_gen().value);
     assert!(
         !Config {
             features: Features {
@@ -4395,7 +4393,7 @@ fn resolve_image_gen_gates() {
 #[serial]
 fn resolve_video_gen_gates() {
     unsafe { std::env::remove_var("BCODE_VIDEO_GEN") };
-    assert!(Config::default().resolve_video_gen().value);
+    assert!(!Config::default().resolve_video_gen().value);
     assert!(
         !Config {
             features: Features {

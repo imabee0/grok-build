@@ -3034,6 +3034,9 @@ async fn prepare_video_gen_config_disabled_when_zdr_flag_set() {
     }
     let agent = build_minimal_agent_for_tests();
     agent.sampling_config.borrow_mut().api_key = Some("test-key".to_string());
+    // Video generation ships off in this fork; turn it on to reach the gate
+    // this test is about.
+    agent.cfg.borrow_mut().features.video_gen = Some(true);
     assert!(matches!(
         agent.prepare_video_gen_config(),
         VideoGenConfig::Enabled { .. }
@@ -3076,6 +3079,9 @@ async fn prepare_video_gen_config_respects_feature_flag() {
     use bcode_tools::implementations::bcode::video_gen::VideoGenConfig;
     let agent = build_minimal_agent_for_tests();
     agent.sampling_config.borrow_mut().api_key = Some("test-key".to_string());
+    // Video generation ships off in this fork; turn it on to reach the gate
+    // this test is about.
+    agent.cfg.borrow_mut().features.video_gen = Some(true);
     assert!(matches!(
         agent.prepare_video_gen_config(),
         VideoGenConfig::Enabled { .. }
@@ -3132,6 +3138,9 @@ async fn prepare_video_gen_config_sends_client_identifier_header() {
     use bcode_tools::implementations::bcode::video_gen::VideoGenConfig;
     let agent = build_minimal_agent_for_tests();
     agent.sampling_config.borrow_mut().api_key = Some("test-key".to_string());
+    // Video generation ships off in this fork; turn it on to reach the gate
+    // this test is about.
+    agent.cfg.borrow_mut().features.video_gen = Some(true);
     let VideoGenConfig::Enabled { extra_headers, .. } = agent.prepare_video_gen_config() else {
         panic!("expected Enabled");
     };

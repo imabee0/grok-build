@@ -29,10 +29,15 @@ impl AuthBackend for BcodeAuthBackend {
         true
     }
 
-    /// Some customers run their own gateway and sign in there with the session bcode issued them, so a list of allowed hosts would lock them out.
-    /// The models cache stops one backend's models from being used by another: it remembers the URL each entry came from and ignores the rest.
-    fn may_receive_session(&self, _url: &str) -> bool {
-        true
+    /// Only a first-party endpoint may receive the session bearer.
+    ///
+    /// Upstream returned `true` for every URL, which was safe while every model
+    /// in the catalog was its own. This catalog is multi-provider: without this
+    /// gate an OAuth session would ride along to `api.deepseek.com` or
+    /// `api.openai.com` on the next request. Provider credentials come from the
+    /// model's own `api_key`/`env_key` instead.
+    fn may_receive_session(&self, url: &str) -> bool {
+        crate::util::is_bcode_api_bearer_url(url)
     }
 
     fn login_host(&self, config: &BcodeComConfig) -> String {
