@@ -8,7 +8,19 @@ struct Claims {
     exp: Option<i64>,
 }
 
+/// `jsonwebtoken` panics unless a process-level CryptoProvider was installed
+/// first, so every entry point into it arms one. Doing it here rather than at
+/// login means the guarantee does not depend on call order -- which is also why
+/// a subset of the test suite used to abort where the whole suite passed.
+pub(crate) fn ensure_crypto_provider() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let _ = jsonwebtoken::crypto::rust_crypto::DEFAULT_PROVIDER.install_default();
+    });
+}
+
 pub fn parse_jwt_expiration(token: &str) -> Option<DateTime<Utc>> {
+    ensure_crypto_provider();
     jsonwebtoken::dangerous::insecure_decode::<Claims>(token)
         .ok()
         .and_then(|data| data.claims.exp)

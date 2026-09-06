@@ -372,11 +372,7 @@ pub async fn run_login_flow_with_config(
 ) -> anyhow::Result<(BcodeAuth, bool)> {
     tracing::info!(issuer = %oidc.issuer, client_id = %oidc.client_id, "OIDC: starting login flow");
 
-    // Ensure jsonwebtoken CryptoProvider is installed (required for JWT validation).
-    jsonwebtoken::crypto::CryptoProvider::install_default(
-        &jsonwebtoken::crypto::rust_crypto::DEFAULT_PROVIDER,
-    )
-    .ok();
+    crate::auth::jwt::ensure_crypto_provider();
 
     let discovery = discover(&oidc.issuer).await?;
     let pkce = generate_pkce();

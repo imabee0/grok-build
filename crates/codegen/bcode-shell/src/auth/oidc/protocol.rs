@@ -115,7 +115,10 @@ pub(crate) fn peek_access_token_principal(
         team_id: Option<String>,
     }
     let token_data =
-        jsonwebtoken::dangerous::insecure_decode::<MinimalClaims>(access_token).ok()?;
+        {
+            crate::auth::jwt::ensure_crypto_provider();
+            jsonwebtoken::dangerous::insecure_decode::<MinimalClaims>(access_token).ok()?
+        };
     let pt = token_data.claims.principal_type?;
     let pid = token_data.claims.principal_id?;
     if pt.is_empty() || pid.is_empty() {
@@ -135,6 +138,7 @@ pub(crate) fn peek_access_token_principal_id(access_token: &str) -> Option<Strin
         #[serde(default, alias = "principalId")]
         principal_id: Option<String>,
     }
+    crate::auth::jwt::ensure_crypto_provider();
     jsonwebtoken::dangerous::insecure_decode::<PrincipalIdClaim>(access_token)
         .ok()?
         .claims
@@ -626,6 +630,7 @@ pub(super) async fn validate_and_extract_user_info(
     expected_client_id: &str,
     expected_nonce: &str,
 ) -> anyhow::Result<OidcUserInfo> {
+    crate::auth::jwt::ensure_crypto_provider();
     let header = jsonwebtoken::decode_header(token)?;
     let kid = header
         .kid
@@ -663,6 +668,7 @@ pub(super) async fn validate_and_extract_user_info(
         .into_iter()
         .map(ToOwned::to_owned)
         .collect();
+    crate::auth::jwt::ensure_crypto_provider();
     let token_data = jsonwebtoken::decode::<IdTokenClaims>(token, &decoding_key, &validation)?;
     if token_data.claims.iss.as_deref() != Some(expected_issuer) {
         return Err(anyhow::Error::new(OidcError::IssuerMismatch));
@@ -886,7 +892,11 @@ mod tests {
             &test_nonce(),
         );
         assert!(url.contains("referrer=bcode-desktop"));
-        assert!(!url.contains("referrer=bcode"));
+        // The default is a prefix of the override, so match the whole value.
+        assert!(
+            !url.contains("referrer=bcode&") && !url.ends_with("referrer=bcode"),
+            "the override must replace the default, not sit beside it: {url}"
+        );
         assert_eq!(
             url.matches("referrer=").count(),
             1,
