@@ -1,0 +1,29 @@
+[package]
+license = "Apache-2.0"
+name = "bcode-workspace-client"
+version = "0.1.0"
+edition.workspace = true
+description = "Lightweight typed client for hub-proxied workspace.* RPCs (shared by bcode-shell proxy mode and other consumers)"
+
+[dependencies]
+semver = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
+tracing = { workspace = true }
+bcode-computer-hub-sdk = { workspace = true }
+bcode-workspace-types = { workspace = true }
+bcode-tool-protocol = { workspace = true }
+bcode-tool-runtime = { workspace = true }
+
+[features]
+default = []
+default-bazel = []
+[dev-dependencies]
+schemars = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "test-util"] }
+bcode-tool-types = { workspace = true }
+
+[lints]
+workspace = true

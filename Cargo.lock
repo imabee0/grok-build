@@ -13046,7 +13046,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "xai-acp-lib"
+name = "bcode-acp-lib"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
@@ -13060,7 +13060,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "xai-agent-lifecycle"
+name = "bcode-agent-lifecycle"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -13069,7 +13069,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "xai-chat-state"
+name = "bcode-chat-state"
 version = "0.1.0"
 dependencies = [
  "indexmap",
@@ -13079,14 +13079,14 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
- "xai-compaction-transcript",
- "xai-grok-compaction",
- "xai-grok-sampling-types",
- "xai-token-estimation",
+ "bcode-compaction-transcript",
+ "bcode-compaction",
+ "bcode-sampling-types",
+ "bcode-token-estimation",
 ]
 
 [[package]]
-name = "xai-circuit-breaker"
+name = "bcode-circuit-breaker"
 version = "0.1.0"
 dependencies = [
  "log",
@@ -13094,7 +13094,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "xai-codebase-graph"
+name = "bcode-codebase-graph"
 version = "0.1.0"
 dependencies = [
  "ahash",
@@ -13125,21 +13125,21 @@ dependencies = [
  "tree-sitter-python",
  "tree-sitter-rust",
  "tree-sitter-typescript",
- "xai-grok-paths",
+ "bcode-paths",
 ]
 
 [[package]]
-name = "xai-compaction-transcript"
+name = "bcode-compaction-transcript"
 version = "0.1.0"
 dependencies = [
  "regex",
  "serde_json",
  "strum 0.27.2",
- "xai-grok-sampling-types",
+ "bcode-sampling-types",
 ]
 
 [[package]]
-name = "xai-computer-hub-core"
+name = "bcode-computer-hub-core"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -13151,13 +13151,13 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
- "xai-tool-protocol",
- "xai-tool-runtime",
- "xai-tool-types",
+ "bcode-tool-protocol",
+ "bcode-tool-runtime",
+ "bcode-tool-types",
 ]
 
 [[package]]
-name = "xai-computer-hub-mcp-adapter"
+name = "bcode-computer-hub-mcp-adapter"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -13168,14 +13168,14 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
- "xai-computer-hub-sdk",
- "xai-tool-protocol",
- "xai-tool-runtime",
- "xai-tool-types",
+ "bcode-computer-hub-sdk",
+ "bcode-tool-protocol",
+ "bcode-tool-runtime",
+ "bcode-tool-types",
 ]
 
 [[package]]
-name = "xai-computer-hub-sdk"
+name = "bcode-computer-hub-sdk"
 version = "0.1.0"
 dependencies = [
  "arc-swap",
@@ -13208,15 +13208,15 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "uuid",
- "xai-computer-hub-core",
- "xai-tool-protocol",
- "xai-tool-runtime",
- "xai-tool-types",
- "xai-tracing",
+ "bcode-computer-hub-core",
+ "bcode-tool-protocol",
+ "bcode-tool-runtime",
+ "bcode-tool-types",
+ "bcode-tracing",
 ]
 
 [[package]]
-name = "xai-crash-handler"
+name = "bcode-crash-handler"
 version = "0.1.0"
 dependencies = [
  "backtrace",
@@ -13227,7 +13227,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "xai-dirs"
+name = "bcode-dirs"
 version = "0.1.0"
 dependencies = [
  "dunce",
@@ -13237,7 +13237,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "xai-fast-worktree"
+name = "bcode-fast-worktree"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -13265,15 +13265,15 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "uuid",
- "xai-dirs",
- "xai-gix-status",
- "xai-sqlite-journal",
- "xai-test-utils",
- "xai-tty-utils",
+ "bcode-dirs",
+ "bcode-gix-status",
+ "bcode-sqlite-journal",
+ "bcode-test-utils",
+ "bcode-tty-utils",
 ]
 
 [[package]]
-name = "xai-file-utils"
+name = "bcode-file-utils"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -13307,17 +13307,17 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber",
  "url",
- "xai-circuit-breaker",
- "xai-dirs",
- "xai-grok-auth",
- "xai-grok-extra-ca",
- "xai-grok-version",
- "xai-test-utils",
+ "bcode-circuit-breaker",
+ "bcode-dirs",
+ "bcode-auth",
+ "bcode-extra-ca",
+ "bcode-version",
+ "bcode-test-utils",
  "zstd",
 ]
 
 [[package]]
-name = "xai-fsnotify"
+name = "bcode-fsnotify"
 version = "0.1.0"
 dependencies = [
  "criterion",
@@ -13334,11 +13334,11 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
- "xai-tracing-macros",
+ "bcode-tracing-macros",
 ]
 
 [[package]]
-name = "xai-fuzzy-file-search"
+name = "bcode-fuzzy-file-search"
 version = "0.1.0"
 dependencies = [
  "ignore",
@@ -13347,21 +13347,21 @@ dependencies = [
  "serde",
  "tempfile",
  "tracing",
- "xai-tty-utils",
+ "bcode-tty-utils",
 ]
 
 [[package]]
-name = "xai-gix-status"
+name = "bcode-gix-status"
 version = "0.1.0"
 dependencies = [
  "gix",
  "libc",
  "tempfile",
- "xai-test-utils",
+ "bcode-test-utils",
 ]
 
 [[package]]
-name = "xai-grok-active-sessions"
+name = "bcode-active-sessions"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
@@ -13373,11 +13373,11 @@ dependencies = [
  "tempfile",
  "tracing",
  "windows 0.61.3",
- "xai-grok-config",
+ "bcode-config",
 ]
 
 [[package]]
-name = "xai-grok-agent"
+name = "bcode-agent"
 version = "0.1.0"
 dependencies = [
  "chrono",
@@ -13396,19 +13396,19 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
- "xai-dirs",
- "xai-grok-config",
- "xai-grok-hooks",
- "xai-grok-sampling-types",
- "xai-grok-tools",
- "xai-token-estimation",
- "xai-tool-types",
- "xai-tty-utils",
+ "bcode-dirs",
+ "bcode-config",
+ "bcode-hooks",
+ "bcode-sampling-types",
+ "bcode-tools",
+ "bcode-token-estimation",
+ "bcode-tool-types",
+ "bcode-tty-utils",
  "zeroize",
 ]
 
 [[package]]
-name = "xai-grok-announcements"
+name = "bcode-announcements"
 version = "0.1.0"
 dependencies = [
  "chrono",
@@ -13417,11 +13417,11 @@ dependencies = [
  "tokio",
  "tracing",
  "ts-rs",
- "xai-grok-tools",
+ "bcode-tools",
 ]
 
 [[package]]
-name = "xai-grok-auth"
+name = "bcode-auth"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -13434,7 +13434,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "xai-grok-bundle"
+name = "bcode-bundle"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -13445,11 +13445,11 @@ dependencies = [
  "sha2 0.10.9",
  "tar",
  "tempfile",
- "xai-grok-config",
+ "bcode-config",
 ]
 
 [[package]]
-name = "xai-grok-compaction"
+name = "bcode-compaction"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -13462,7 +13462,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "xai-grok-config"
+name = "bcode-config"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
@@ -13481,13 +13481,13 @@ dependencies = [
  "tracing",
  "urlencoding",
  "which",
- "xai-dirs",
- "xai-grok-version",
- "xai-tty-utils",
+ "bcode-dirs",
+ "bcode-version",
+ "bcode-tty-utils",
 ]
 
 [[package]]
-name = "xai-grok-config-types"
+name = "bcode-config-types"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
@@ -13497,13 +13497,13 @@ dependencies = [
  "strum 0.27.2",
  "toml",
  "tracing",
- "xai-grok-announcements",
- "xai-grok-config",
- "xai-grok-mcp",
+ "bcode-announcements",
+ "bcode-config",
+ "bcode-mcp",
 ]
 
 [[package]]
-name = "xai-grok-dashboard-store"
+name = "bcode-dashboard-store"
 version = "0.1.0"
 dependencies = [
  "pretty_assertions",
@@ -13511,12 +13511,12 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tracing",
- "xai-grok-config",
- "xai-sqlite-journal",
+ "bcode-config",
+ "bcode-sqlite-journal",
 ]
 
 [[package]]
-name = "xai-grok-diag-server"
+name = "bcode-diag-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -13527,11 +13527,11 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
- "xai-grok-version",
+ "bcode-version",
 ]
 
 [[package]]
-name = "xai-grok-env"
+name = "bcode-env"
 version = "0.1.0"
 dependencies = [
  "tracing",
@@ -13539,7 +13539,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "xai-grok-extra-ca"
+name = "bcode-extra-ca"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
@@ -13553,7 +13553,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "xai-grok-foreign-sessions"
+name = "bcode-foreign-sessions"
 version = "0.1.0"
 dependencies = [
  "chrono",
@@ -13567,13 +13567,13 @@ dependencies = [
  "serde_json",
  "tempfile",
  "uuid",
- "xai-dirs",
- "xai-sqlite-journal",
+ "bcode-dirs",
+ "bcode-sqlite-journal",
  "zstd",
 ]
 
 [[package]]
-name = "xai-grok-gboom"
+name = "bcode-gboom"
 version = "0.1.0"
 dependencies = [
  "crossterm",
@@ -13581,7 +13581,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "xai-grok-hooks"
+name = "bcode-hooks"
 version = "0.1.0"
 dependencies = [
  "fastrand",
@@ -13597,14 +13597,14 @@ dependencies = [
  "toml",
  "tracing",
  "url",
- "xai-grok-config",
- "xai-grok-extra-ca",
- "xai-grok-sandbox",
- "xai-grok-tools",
+ "bcode-config",
+ "bcode-extra-ca",
+ "bcode-sandbox",
+ "bcode-tools",
 ]
 
 [[package]]
-name = "xai-grok-http"
+name = "bcode-http"
 version = "0.1.0"
 dependencies = [
  "rcgen",
@@ -13614,16 +13614,16 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
- "xai-grok-auth",
- "xai-grok-extra-ca",
- "xai-grok-sampler",
- "xai-grok-telemetry",
- "xai-grok-version",
- "xai-grok-workspace",
+ "bcode-auth",
+ "bcode-extra-ca",
+ "bcode-sampler",
+ "bcode-telemetry",
+ "bcode-version",
+ "bcode-workspace",
 ]
 
 [[package]]
-name = "xai-grok-markdown"
+name = "bcode-markdown"
 version = "0.1.0"
 dependencies = [
  "anstyle",
@@ -13643,19 +13643,19 @@ dependencies = [
  "unicode-segmentation",
  "unicode-width 0.2.0",
  "url",
- "xai-grok-markdown-core",
- "xai-ratatui-textarea",
+ "bcode-markdown-core",
+ "bcode-ratatui-textarea",
 ]
 
 [[package]]
-name = "xai-grok-markdown-core"
+name = "bcode-markdown-core"
 version = "0.1.0"
 dependencies = [
  "pulldown-cmark",
 ]
 
 [[package]]
-name = "xai-grok-mcp"
+name = "bcode-mcp"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
@@ -13681,22 +13681,22 @@ dependencies = [
  "url",
  "webbrowser",
  "which",
- "xai-computer-hub-sdk",
- "xai-grok-config",
- "xai-grok-extra-ca",
- "xai-grok-sandbox",
- "xai-grok-session-events",
- "xai-grok-telemetry",
- "xai-grok-tools",
- "xai-grok-version",
- "xai-grok-workspace-types",
- "xai-tool-protocol",
- "xai-tool-runtime",
- "xai-tool-types",
+ "bcode-computer-hub-sdk",
+ "bcode-config",
+ "bcode-extra-ca",
+ "bcode-sandbox",
+ "bcode-session-events",
+ "bcode-telemetry",
+ "bcode-tools",
+ "bcode-version",
+ "bcode-workspace-types",
+ "bcode-tool-protocol",
+ "bcode-tool-runtime",
+ "bcode-tool-types",
 ]
 
 [[package]]
-name = "xai-grok-memory"
+name = "bcode-memory"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -13721,17 +13721,17 @@ dependencies = [
  "tokio",
  "tracing",
  "windows 0.61.3",
- "xai-grok-auth",
- "xai-grok-config-types",
- "xai-grok-http",
- "xai-grok-tools",
- "xai-grok-version",
- "xai-sqlite-journal",
- "xai-token-estimation",
+ "bcode-auth",
+ "bcode-config-types",
+ "bcode-http",
+ "bcode-tools",
+ "bcode-version",
+ "bcode-sqlite-journal",
+ "bcode-token-estimation",
 ]
 
 [[package]]
-name = "xai-grok-mermaid"
+name = "bcode-mermaid"
 version = "0.1.0"
 dependencies = [
  "fontdb",
@@ -13745,11 +13745,11 @@ dependencies = [
  "tracing",
  "wait-timeout",
  "which",
- "xai-tty-utils",
+ "bcode-tty-utils",
 ]
 
 [[package]]
-name = "xai-grok-models"
+name = "bcode-models"
 version = "0.1.0"
 dependencies = [
  "serde",
@@ -13757,7 +13757,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "xai-grok-pager"
+name = "bcode-pager"
 version = "1.0.16"
 dependencies = [
  "agent-client-protocol",
@@ -13814,46 +13814,46 @@ dependencies = [
  "uuid",
  "walkdir",
  "windows-sys 0.59.0",
- "xai-acp-lib",
- "xai-crash-handler",
- "xai-dirs",
- "xai-fast-worktree",
- "xai-file-utils",
- "xai-grok-active-sessions",
- "xai-grok-agent",
- "xai-grok-announcements",
- "xai-grok-config",
- "xai-grok-dashboard-store",
- "xai-grok-extra-ca",
- "xai-grok-foreign-sessions",
- "xai-grok-gboom",
- "xai-grok-hooks",
- "xai-grok-markdown",
- "xai-grok-mermaid",
- "xai-grok-pager-diff",
- "xai-grok-pager-pty-harness",
- "xai-grok-pager-render",
- "xai-grok-plugin-marketplace",
- "xai-grok-sandbox",
- "xai-grok-shell",
- "xai-grok-status-line",
- "xai-grok-telemetry",
- "xai-grok-test-support",
- "xai-grok-tools",
- "xai-grok-update",
- "xai-grok-version",
- "xai-grok-voice",
- "xai-grok-workspace",
- "xai-hooks-plugins-types",
- "xai-prompt-queue",
- "xai-ratatui-inline",
- "xai-ratatui-textarea",
- "xai-token-estimation",
- "xai-tty-utils",
+ "bcode-acp-lib",
+ "bcode-crash-handler",
+ "bcode-dirs",
+ "bcode-fast-worktree",
+ "bcode-file-utils",
+ "bcode-active-sessions",
+ "bcode-agent",
+ "bcode-announcements",
+ "bcode-config",
+ "bcode-dashboard-store",
+ "bcode-extra-ca",
+ "bcode-foreign-sessions",
+ "bcode-gboom",
+ "bcode-hooks",
+ "bcode-markdown",
+ "bcode-mermaid",
+ "bcode-pager-diff",
+ "bcode-pager-pty-harness",
+ "bcode-pager-render",
+ "bcode-plugin-marketplace",
+ "bcode-sandbox",
+ "bcode-shell",
+ "bcode-status-line",
+ "bcode-telemetry",
+ "bcode-test-support",
+ "bcode-tools",
+ "bcode-update",
+ "bcode-version",
+ "bcode-voice",
+ "bcode-workspace",
+ "bcode-hooks-plugins-types",
+ "bcode-prompt-queue",
+ "bcode-ratatui-inline",
+ "bcode-ratatui-textarea",
+ "bcode-token-estimation",
+ "bcode-tty-utils",
 ]
 
 [[package]]
-name = "xai-grok-pager-bin"
+name = "bcode-pager-bin"
 version = "1.0.16"
 dependencies = [
  "anyhow",
@@ -13873,35 +13873,35 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-subscriber",
- "xai-acp-lib",
- "xai-crash-handler",
- "xai-grok-active-sessions",
- "xai-grok-config",
- "xai-grok-extra-ca",
- "xai-grok-pager",
- "xai-grok-pager-minimal",
- "xai-grok-sandbox",
- "xai-grok-shell",
- "xai-grok-telemetry",
- "xai-grok-update",
- "xai-grok-version",
- "xai-grok-workspace",
- "xai-tty-utils",
+ "bcode-acp-lib",
+ "bcode-crash-handler",
+ "bcode-active-sessions",
+ "bcode-config",
+ "bcode-extra-ca",
+ "bcode-pager",
+ "bcode-pager-minimal",
+ "bcode-sandbox",
+ "bcode-shell",
+ "bcode-telemetry",
+ "bcode-update",
+ "bcode-version",
+ "bcode-workspace",
+ "bcode-tty-utils",
 ]
 
 [[package]]
-name = "xai-grok-pager-diff"
+name = "bcode-pager-diff"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
  "serde_json",
  "similar",
  "tracing",
- "xai-grok-tools",
+ "bcode-tools",
 ]
 
 [[package]]
-name = "xai-grok-pager-minimal"
+name = "bcode-pager-minimal"
 version = "0.1.0"
 dependencies = [
  "chrono",
@@ -13910,16 +13910,16 @@ dependencies = [
  "similar",
  "tracing",
  "uuid",
- "xai-grok-pager",
- "xai-grok-pager-diff",
- "xai-grok-shell",
- "xai-grok-version",
- "xai-ratatui-inline",
- "xai-token-estimation",
+ "bcode-pager",
+ "bcode-pager-diff",
+ "bcode-shell",
+ "bcode-version",
+ "bcode-ratatui-inline",
+ "bcode-token-estimation",
 ]
 
 [[package]]
-name = "xai-grok-pager-pty-harness"
+name = "bcode-pager-pty-harness"
 version = "0.1.0"
 dependencies = [
  "alacritty_terminal",
@@ -13939,12 +13939,12 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "xai-grok-test-support",
- "xai-tty-utils",
+ "bcode-test-support",
+ "bcode-tty-utils",
 ]
 
 [[package]]
-name = "xai-grok-pager-render"
+name = "bcode-pager-render"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
@@ -13986,22 +13986,22 @@ dependencies = [
  "uuid",
  "vte 0.15.0",
  "windows-sys 0.59.0",
- "xai-dirs",
- "xai-grok-config",
- "xai-grok-gboom",
- "xai-grok-markdown",
- "xai-grok-paths",
- "xai-grok-shared",
- "xai-grok-telemetry",
- "xai-grok-tools",
- "xai-grok-workspace",
- "xai-ratatui-inline",
- "xai-ratatui-textarea",
- "xai-tty-utils",
+ "bcode-dirs",
+ "bcode-config",
+ "bcode-gboom",
+ "bcode-markdown",
+ "bcode-paths",
+ "bcode-shared",
+ "bcode-telemetry",
+ "bcode-tools",
+ "bcode-workspace",
+ "bcode-ratatui-inline",
+ "bcode-ratatui-textarea",
+ "bcode-tty-utils",
 ]
 
 [[package]]
-name = "xai-grok-paths"
+name = "bcode-paths"
 version = "0.1.0"
 dependencies = [
  "camino",
@@ -14011,7 +14011,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "xai-grok-plugin-marketplace"
+name = "bcode-plugin-marketplace"
 version = "0.1.0"
 dependencies = [
  "chrono",
@@ -14023,15 +14023,15 @@ dependencies = [
  "thiserror 2.0.18",
  "toml",
  "tracing",
- "xai-dirs",
- "xai-grok-agent",
- "xai-grok-config",
- "xai-hooks-plugins-types",
- "xai-tty-utils",
+ "bcode-dirs",
+ "bcode-agent",
+ "bcode-config",
+ "bcode-hooks-plugins-types",
+ "bcode-tty-utils",
 ]
 
 [[package]]
-name = "xai-grok-sampler"
+name = "bcode-sampler"
 version = "0.1.0"
 dependencies = [
  "async-openai",
@@ -14050,15 +14050,15 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
- "xai-grok-auth",
- "xai-grok-extra-ca",
- "xai-grok-sampling-types",
- "xai-grok-test-support",
- "xai-grok-version",
+ "bcode-auth",
+ "bcode-extra-ca",
+ "bcode-sampling-types",
+ "bcode-test-support",
+ "bcode-version",
 ]
 
 [[package]]
-name = "xai-grok-sampling-types"
+name = "bcode-sampling-types"
 version = "0.1.0"
 dependencies = [
  "assert_matches",
@@ -14071,13 +14071,13 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "tracing",
- "xai-circuit-breaker",
- "xai-grok-compaction",
- "xai-grok-tools",
+ "bcode-circuit-breaker",
+ "bcode-compaction",
+ "bcode-tools",
 ]
 
 [[package]]
-name = "xai-grok-sandbox"
+name = "bcode-sandbox"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -14097,12 +14097,12 @@ dependencies = [
  "toml",
  "tracing",
  "url",
- "xai-dirs",
- "xai-grok-config",
+ "bcode-dirs",
+ "bcode-config",
 ]
 
 [[package]]
-name = "xai-grok-secrets"
+name = "bcode-secrets"
 version = "0.1.0"
 dependencies = [
  "regex",
@@ -14111,7 +14111,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "xai-grok-session-events"
+name = "bcode-session-events"
 version = "0.1.0"
 dependencies = [
  "chrono",
@@ -14123,7 +14123,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "xai-grok-session-search"
+name = "bcode-session-search"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -14138,13 +14138,13 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
- "xai-grok-config",
- "xai-grok-telemetry",
- "xai-sqlite-journal",
+ "bcode-config",
+ "bcode-telemetry",
+ "bcode-sqlite-journal",
 ]
 
 [[package]]
-name = "xai-grok-shared"
+name = "bcode-shared"
 version = "0.0.0"
 dependencies = [
  "agent-client-protocol",
@@ -14166,16 +14166,16 @@ dependencies = [
  "urlencoding",
  "uuid",
  "wl-clipboard-rs",
- "xai-dirs",
- "xai-grok-config-types",
- "xai-grok-models",
- "xai-grok-status-line",
- "xai-grok-tools",
- "xai-tty-utils",
+ "bcode-dirs",
+ "bcode-config-types",
+ "bcode-models",
+ "bcode-status-line",
+ "bcode-tools",
+ "bcode-tty-utils",
 ]
 
 [[package]]
-name = "xai-grok-shell"
+name = "bcode-shell"
 version = "1.0.16"
 dependencies = [
  "agent-client-protocol",
@@ -14263,67 +14263,67 @@ dependencies = [
  "walkdir",
  "webbrowser",
  "windows 0.61.3",
- "xai-acp-lib",
- "xai-agent-lifecycle",
- "xai-chat-state",
- "xai-codebase-graph",
- "xai-compaction-transcript",
- "xai-computer-hub-sdk",
- "xai-dirs",
- "xai-fast-worktree",
- "xai-file-utils",
- "xai-fsnotify",
- "xai-grok-agent",
- "xai-grok-announcements",
- "xai-grok-auth",
- "xai-grok-bundle",
- "xai-grok-compaction",
- "xai-grok-config",
- "xai-grok-config-types",
- "xai-grok-extra-ca",
- "xai-grok-foreign-sessions",
- "xai-grok-hooks",
- "xai-grok-http",
- "xai-grok-mcp",
- "xai-grok-memory",
- "xai-grok-models",
- "xai-grok-paths",
- "xai-grok-plugin-marketplace",
- "xai-grok-sampler",
- "xai-grok-sampling-types",
- "xai-grok-sandbox",
- "xai-grok-session-events",
- "xai-grok-session-search",
- "xai-grok-shared",
- "xai-grok-shell-base",
- "xai-grok-shell-session-support",
- "xai-grok-shell-terminal",
- "xai-grok-status-line",
- "xai-grok-subagent-resolution",
- "xai-grok-telemetry",
- "xai-grok-test-support",
- "xai-grok-tools",
- "xai-grok-version",
- "xai-grok-workspace",
- "xai-hooks-plugins-types",
- "xai-hunk-tracker",
- "xai-interjection-core",
- "xai-message-delivery-core",
- "xai-prompt-queue",
- "xai-system-power",
- "xai-test-utils",
- "xai-token-estimation",
- "xai-tool-protocol",
- "xai-tool-runtime",
- "xai-tool-types",
- "xai-tracing-macros",
- "xai-tty-utils",
- "xai-workflow",
+ "bcode-acp-lib",
+ "bcode-agent-lifecycle",
+ "bcode-chat-state",
+ "bcode-codebase-graph",
+ "bcode-compaction-transcript",
+ "bcode-computer-hub-sdk",
+ "bcode-dirs",
+ "bcode-fast-worktree",
+ "bcode-file-utils",
+ "bcode-fsnotify",
+ "bcode-agent",
+ "bcode-announcements",
+ "bcode-auth",
+ "bcode-bundle",
+ "bcode-compaction",
+ "bcode-config",
+ "bcode-config-types",
+ "bcode-extra-ca",
+ "bcode-foreign-sessions",
+ "bcode-hooks",
+ "bcode-http",
+ "bcode-mcp",
+ "bcode-memory",
+ "bcode-models",
+ "bcode-paths",
+ "bcode-plugin-marketplace",
+ "bcode-sampler",
+ "bcode-sampling-types",
+ "bcode-sandbox",
+ "bcode-session-events",
+ "bcode-session-search",
+ "bcode-shared",
+ "bcode-shell-base",
+ "bcode-shell-session-support",
+ "bcode-shell-terminal",
+ "bcode-status-line",
+ "bcode-subagent-resolution",
+ "bcode-telemetry",
+ "bcode-test-support",
+ "bcode-tools",
+ "bcode-version",
+ "bcode-workspace",
+ "bcode-hooks-plugins-types",
+ "bcode-hunk-tracker",
+ "bcode-interjection-core",
+ "bcode-message-delivery-core",
+ "bcode-prompt-queue",
+ "bcode-system-power",
+ "bcode-test-utils",
+ "bcode-token-estimation",
+ "bcode-tool-protocol",
+ "bcode-tool-runtime",
+ "bcode-tool-types",
+ "bcode-tracing-macros",
+ "bcode-tty-utils",
+ "bcode-workflow",
  "zstd",
 ]
 
 [[package]]
-name = "xai-grok-shell-base"
+name = "bcode-shell-base"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -14340,16 +14340,16 @@ dependencies = [
  "tracing",
  "url",
  "windows 0.61.3",
- "xai-grok-config",
- "xai-grok-env",
- "xai-grok-extra-ca",
- "xai-grok-shared",
- "xai-grok-version",
- "xai-tty-utils",
+ "bcode-config",
+ "bcode-env",
+ "bcode-extra-ca",
+ "bcode-shared",
+ "bcode-version",
+ "bcode-tty-utils",
 ]
 
 [[package]]
-name = "xai-grok-shell-session-support"
+name = "bcode-shell-session-support"
 version = "0.1.0"
 dependencies = [
  "axum",
@@ -14359,13 +14359,13 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
- "xai-file-utils",
- "xai-grok-http",
- "xai-grok-version",
+ "bcode-file-utils",
+ "bcode-http",
+ "bcode-version",
 ]
 
 [[package]]
-name = "xai-grok-shell-terminal"
+name = "bcode-shell-terminal"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
@@ -14385,17 +14385,17 @@ dependencies = [
  "tracing",
  "uuid",
  "windows 0.61.3",
- "xai-acp-lib",
- "xai-grok-config",
- "xai-grok-paths",
- "xai-grok-sandbox",
- "xai-grok-tools",
- "xai-grok-workspace",
- "xai-tty-utils",
+ "bcode-acp-lib",
+ "bcode-config",
+ "bcode-paths",
+ "bcode-sandbox",
+ "bcode-tools",
+ "bcode-workspace",
+ "bcode-tty-utils",
 ]
 
 [[package]]
-name = "xai-grok-status-line"
+name = "bcode-status-line"
 version = "0.1.0"
 dependencies = [
  "serde",
@@ -14405,7 +14405,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "xai-grok-subagent-resolution"
+name = "bcode-subagent-resolution"
 version = "0.1.0"
 dependencies = [
  "chrono",
@@ -14416,14 +14416,14 @@ dependencies = [
  "tokio",
  "toml",
  "tracing",
- "xai-grok-agent",
- "xai-grok-sampling-types",
- "xai-grok-tools",
- "xai-tool-types",
+ "bcode-agent",
+ "bcode-sampling-types",
+ "bcode-tools",
+ "bcode-tool-types",
 ]
 
 [[package]]
-name = "xai-grok-telemetry"
+name = "bcode-telemetry"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -14466,23 +14466,23 @@ dependencies = [
  "uuid",
  "webpki-roots 0.26.11",
  "whoami",
- "xai-dirs",
- "xai-file-utils",
- "xai-grok-auth",
- "xai-grok-config",
- "xai-grok-env",
- "xai-grok-extra-ca",
- "xai-grok-sampler",
- "xai-grok-secrets",
- "xai-grok-session-events",
- "xai-grok-version",
- "xai-mixpanel",
- "xai-token-estimation",
- "xai-tty-utils",
+ "bcode-dirs",
+ "bcode-file-utils",
+ "bcode-auth",
+ "bcode-config",
+ "bcode-env",
+ "bcode-extra-ca",
+ "bcode-sampler",
+ "bcode-secrets",
+ "bcode-session-events",
+ "bcode-version",
+ "bcode-mixpanel",
+ "bcode-token-estimation",
+ "bcode-tty-utils",
 ]
 
 [[package]]
-name = "xai-grok-test-support"
+name = "bcode-test-support"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
@@ -14503,12 +14503,12 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
- "xai-acp-lib",
- "xai-tty-utils",
+ "bcode-acp-lib",
+ "bcode-tty-utils",
 ]
 
 [[package]]
-name = "xai-grok-tools"
+name = "bcode-tools"
 version = "0.1.220-alpha.4"
 dependencies = [
  "anyhow",
@@ -14573,32 +14573,32 @@ dependencies = [
  "wildmatch",
  "windows 0.61.3",
  "wiremock",
- "xai-computer-hub-core",
- "xai-computer-hub-sdk",
- "xai-dirs",
- "xai-file-utils",
- "xai-grok-auth",
- "xai-grok-config",
- "xai-grok-env",
- "xai-grok-extra-ca",
- "xai-grok-sandbox",
- "xai-grok-test-support",
- "xai-grok-tools-api",
- "xai-grok-version",
- "xai-grok-workspace-types",
- "xai-interjection-core",
- "xai-test-utils",
- "xai-token-estimation",
- "xai-tool-protocol",
- "xai-tool-runtime",
- "xai-tool-types",
- "xai-tty-utils",
+ "bcode-computer-hub-core",
+ "bcode-computer-hub-sdk",
+ "bcode-dirs",
+ "bcode-file-utils",
+ "bcode-auth",
+ "bcode-config",
+ "bcode-env",
+ "bcode-extra-ca",
+ "bcode-sandbox",
+ "bcode-test-support",
+ "bcode-tools-api",
+ "bcode-version",
+ "bcode-workspace-types",
+ "bcode-interjection-core",
+ "bcode-test-utils",
+ "bcode-token-estimation",
+ "bcode-tool-protocol",
+ "bcode-tool-runtime",
+ "bcode-tool-types",
+ "bcode-tty-utils",
  "zip",
  "zstd",
 ]
 
 [[package]]
-name = "xai-grok-tools-api"
+name = "bcode-tools-api"
 version = "0.1.220-alpha.4"
 dependencies = [
  "prost",
@@ -14606,12 +14606,12 @@ dependencies = [
  "serde_json",
  "tonic",
  "tonic-prost",
- "xai-proto-build",
- "xai-tool-protocol",
+ "bcode-proto-build",
+ "bcode-tool-protocol",
 ]
 
 [[package]]
-name = "xai-grok-update"
+name = "bcode-update"
 version = "0.1.220-alpha.4"
 dependencies = [
  "anyhow",
@@ -14632,24 +14632,24 @@ dependencies = [
  "tracing",
  "url",
  "wiremock",
- "xai-dirs",
- "xai-grok-extra-ca",
- "xai-grok-shell",
- "xai-grok-telemetry",
- "xai-grok-tools",
- "xai-grok-version",
+ "bcode-dirs",
+ "bcode-extra-ca",
+ "bcode-shell",
+ "bcode-telemetry",
+ "bcode-tools",
+ "bcode-version",
  "zstd",
 ]
 
 [[package]]
-name = "xai-grok-version"
+name = "bcode-version"
 version = "1.0.16"
 dependencies = [
  "semver",
 ]
 
 [[package]]
-name = "xai-grok-voice"
+name = "bcode-voice"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -14664,13 +14664,13 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
- "xai-dirs",
- "xai-grok-extra-ca",
- "xai-tty-utils",
+ "bcode-dirs",
+ "bcode-extra-ca",
+ "bcode-tty-utils",
 ]
 
 [[package]]
-name = "xai-grok-workspace"
+name = "bcode-workspace"
 version = "0.1.220-alpha.4"
 dependencies = [
  "agent-client-protocol",
@@ -14726,47 +14726,47 @@ dependencies = [
  "urlencoding",
  "uuid",
  "wait-timeout",
- "xai-acp-lib",
- "xai-codebase-graph",
- "xai-computer-hub-mcp-adapter",
- "xai-computer-hub-sdk",
- "xai-dirs",
- "xai-fast-worktree",
- "xai-file-utils",
- "xai-fsnotify",
- "xai-fuzzy-file-search",
- "xai-grok-agent",
- "xai-grok-auth",
- "xai-grok-config",
- "xai-grok-config-types",
- "xai-grok-diag-server",
- "xai-grok-env",
- "xai-grok-extra-ca",
- "xai-grok-hooks",
- "xai-grok-mcp",
- "xai-grok-paths",
- "xai-grok-sandbox",
- "xai-grok-session-events",
- "xai-grok-telemetry",
- "xai-grok-tools",
- "xai-grok-tools-api",
- "xai-grok-version",
- "xai-grok-workspace-client",
- "xai-grok-workspace-daemon",
- "xai-grok-workspace-types",
- "xai-hunk-tracker",
- "xai-test-utils",
- "xai-tool-protocol",
- "xai-tool-runtime",
- "xai-tool-types",
- "xai-tracing",
- "xai-tty-utils",
+ "bcode-acp-lib",
+ "bcode-codebase-graph",
+ "bcode-computer-hub-mcp-adapter",
+ "bcode-computer-hub-sdk",
+ "bcode-dirs",
+ "bcode-fast-worktree",
+ "bcode-file-utils",
+ "bcode-fsnotify",
+ "bcode-fuzzy-file-search",
+ "bcode-agent",
+ "bcode-auth",
+ "bcode-config",
+ "bcode-config-types",
+ "bcode-diag-server",
+ "bcode-env",
+ "bcode-extra-ca",
+ "bcode-hooks",
+ "bcode-mcp",
+ "bcode-paths",
+ "bcode-sandbox",
+ "bcode-session-events",
+ "bcode-telemetry",
+ "bcode-tools",
+ "bcode-tools-api",
+ "bcode-version",
+ "bcode-workspace-client",
+ "bcode-workspace-daemon",
+ "bcode-workspace-types",
+ "bcode-hunk-tracker",
+ "bcode-test-utils",
+ "bcode-tool-protocol",
+ "bcode-tool-runtime",
+ "bcode-tool-types",
+ "bcode-tracing",
+ "bcode-tty-utils",
  "zip",
  "zstd",
 ]
 
 [[package]]
-name = "xai-grok-workspace-client"
+name = "bcode-workspace-client"
 version = "0.1.0"
 dependencies = [
  "schemars 1.0.4",
@@ -14776,15 +14776,15 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
- "xai-computer-hub-sdk",
- "xai-grok-workspace-types",
- "xai-tool-protocol",
- "xai-tool-runtime",
- "xai-tool-types",
+ "bcode-computer-hub-sdk",
+ "bcode-workspace-types",
+ "bcode-tool-protocol",
+ "bcode-tool-runtime",
+ "bcode-tool-types",
 ]
 
 [[package]]
-name = "xai-grok-workspace-daemon"
+name = "bcode-workspace-daemon"
 version = "0.1.0"
 dependencies = [
  "clap",
@@ -14798,12 +14798,12 @@ dependencies = [
  "tokio",
  "tracing",
  "windows 0.61.3",
- "xai-computer-hub-sdk",
- "xai-tty-utils",
+ "bcode-computer-hub-sdk",
+ "bcode-tty-utils",
 ]
 
 [[package]]
-name = "xai-grok-workspace-types"
+name = "bcode-workspace-types"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
@@ -14814,7 +14814,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "xai-hooks-plugins-types"
+name = "bcode-hooks-plugins-types"
 version = "0.1.0"
 dependencies = [
  "serde",
@@ -14822,7 +14822,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "xai-hunk-tracker"
+name = "bcode-hunk-tracker"
 version = "0.1.0"
 dependencies = [
  "chrono",
@@ -14838,34 +14838,34 @@ dependencies = [
  "tokio-util",
  "tracing",
  "uuid",
- "xai-gix-status",
- "xai-test-utils",
+ "bcode-gix-status",
+ "bcode-test-utils",
 ]
 
 [[package]]
-name = "xai-interjection-core"
+name = "bcode-interjection-core"
 version = "0.1.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
-name = "xai-message-delivery-core"
+name = "bcode-message-delivery-core"
 version = "0.1.0"
 
 [[package]]
-name = "xai-mixpanel"
+name = "bcode-mixpanel"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "reqwest 0.12.24",
  "serde_json",
  "thiserror 2.0.18",
- "xai-grok-secrets",
+ "bcode-secrets",
 ]
 
 [[package]]
-name = "xai-prompt-queue"
+name = "bcode-prompt-queue"
 version = "0.1.0"
 dependencies = [
  "serde",
@@ -14873,7 +14873,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "xai-proto-build"
+name = "bcode-proto-build"
 version = "0.0.0"
 dependencies = [
  "anyhow",
@@ -14885,7 +14885,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "xai-ratatui-inline"
+name = "bcode-ratatui-inline"
 version = "0.1.0"
 dependencies = [
  "ansi-width",
@@ -14902,7 +14902,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "xai-ratatui-textarea"
+name = "bcode-ratatui-textarea"
 version = "0.1.0"
 dependencies = [
  "arboard",
@@ -14922,7 +14922,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "xai-sqlite-journal"
+name = "bcode-sqlite-journal"
 version = "0.1.0"
 dependencies = [
  "libc",
@@ -14933,7 +14933,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "xai-system-power"
+name = "bcode-system-power"
 version = "0.1.0"
 dependencies = [
  "windows-sys 0.59.0",
@@ -14941,7 +14941,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "xai-test-utils"
+name = "bcode-test-utils"
 version = "0.1.0"
 dependencies = [
  "runfiles",
@@ -14950,11 +14950,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "xai-token-estimation"
+name = "bcode-token-estimation"
 version = "0.1.0"
 
 [[package]]
-name = "xai-tool-protocol"
+name = "bcode-tool-protocol"
 version = "0.1.0"
 dependencies = [
  "serde",
@@ -14962,11 +14962,11 @@ dependencies = [
  "thiserror 2.0.18",
  "typeshare",
  "uuid",
- "xai-tool-types",
+ "bcode-tool-types",
 ]
 
 [[package]]
-name = "xai-tool-runtime"
+name = "bcode-tool-runtime"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -14977,13 +14977,13 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-util",
- "xai-grok-tools-api",
- "xai-tool-protocol",
- "xai-tool-types",
+ "bcode-tools-api",
+ "bcode-tool-protocol",
+ "bcode-tool-types",
 ]
 
 [[package]]
-name = "xai-tool-types"
+name = "bcode-tool-types"
 version = "0.1.0"
 dependencies = [
  "minijinja",
@@ -14993,7 +14993,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "xai-tracing"
+name = "bcode-tracing"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -15023,11 +15023,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "xai-tracing-macros"
+name = "bcode-tracing-macros"
 version = "0.1.0"
 
 [[package]]
-name = "xai-tty-utils"
+name = "bcode-tty-utils"
 version = "0.1.0"
 dependencies = [
  "libc",
@@ -15037,7 +15037,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "xai-workflow"
+name = "bcode-workflow"
 version = "0.1.0"
 dependencies = [
  "libc",

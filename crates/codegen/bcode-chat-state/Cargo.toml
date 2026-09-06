@@ -1,0 +1,29 @@
+[package]
+license = "Apache-2.0"
+name = "bcode-chat-state"
+version = "0.1.0"
+edition.workspace = true
+description = "Actor-based chat state management for bcode agents"
+
+[features]
+default-bazel = []
+
+[dependencies]
+indexmap = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+strum = { workspace = true }
+tokio = { workspace = true, features = ["sync", "rt", "macros"] }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+# `CompactionDetail`, embedded in `CompactionMode::Segments`.
+bcode-compaction-transcript = { workspace = true }
+bcode-compaction = { path = "../../common/bcode-compaction" }
+bcode-sampling-types = { path = "../bcode-sampling-types" }
+bcode-token-estimation = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+
+[lints]
+workspace = true

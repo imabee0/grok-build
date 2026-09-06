@@ -60,7 +60,7 @@ Copyright:  Copyright (c) 2023, XetData; Copyright (c) 2025, Hugging Face
 --------------------------------------------------------------------------------
 End of notices for vendored third_party/ crates.
 
-Full product notices (all crates.io / git dependencies shipped with the Grok
+Full product notices (all crates.io / git dependencies shipped with the Bcode
 CLI, including MPL packages, Apache NOTICE files, libgit2 COPYING, and
 dual-license elections) live in:
 

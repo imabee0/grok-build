@@ -1,0 +1,50 @@
+[package]
+license = "Apache-2.0"
+name = "bcode-sampler"
+version = "0.1.0"
+edition.workspace = true
+description = "Actor-based sampling/inference layer for bcode bcode (HTTP streaming + retry, no shell coupling)"
+
+[dependencies]
+# Internal
+bcode-auth = { workspace = true }
+bcode-extra-ca = { workspace = true }
+bcode-sampling-types = { path = "../bcode-sampling-types" }
+bcode-version = { workspace = true }
+
+# External
+async-openai = { workspace = true }
+async-stream = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+eventsource-stream = { workspace = true }
+futures-util = { workspace = true }
+indexmap = { workspace = true, features = ["serde"] }
+reqwest = { workspace = true, features = ["stream", "rustls-tls-native-roots"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+strum = { workspace = true }
+tokio = { workspace = true, features = ["rt", "macros", "time", "sync"] }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
+
+[dev-dependencies]
+# Mock HTTP server for actor / request_task integration tests.
+axum = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["registry"] }
+# Shared SSE generators for the happy-path mock payloads.
+bcode-test-support = { workspace = true }
+# `start_paused = true` for deterministic timeout testing; `net` for
+# `TcpListener::bind` in the mock server harness.
+tokio = { workspace = true, features = [
+    "rt",
+    "macros",
+    "time",
+    "sync",
+    "test-util",
+    "net",
+    "rt-multi-thread",
+] }
+
+[lints]
+workspace = true

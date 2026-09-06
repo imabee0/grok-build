@@ -1,0 +1,24 @@
+[package]
+license = "Apache-2.0"
+name = "bcode-config-types"
+version = "0.1.0"
+edition.workspace = true
+description = "Leaf configuration value types for the bcode CLI, extracted from bcode-shell for dependency inversion."
+
+[dependencies]
+agent-client-protocol = { workspace = true }
+indexmap = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+strum = { workspace = true }
+toml = { workspace = true }
+tracing = { workspace = true }
+bcode-announcements = { workspace = true }
+bcode-config = { workspace = true }
+bcode-mcp = { workspace = true }
+
+[features]
+default-bazel = []
+
+[lints]
+workspace = true

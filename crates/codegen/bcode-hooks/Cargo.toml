@@ -1,0 +1,33 @@
+[package]
+license = "Apache-2.0"
+name = "bcode-hooks"
+version = "0.1.0"
+edition.workspace = true
+description = "Runtime hook system for Bcode — file-based discovery, command execution, and policy enforcement"
+
+[dependencies]
+fastrand = { workspace = true }
+regex = { workspace = true }
+reqwest = { workspace = true }
+bcode-extra-ca = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+shellexpand = "3.1"
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["process", "rt", "macros", "time"] }
+toml = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+bcode-config = { workspace = true }
+# Child-network restriction on hook command spawns; enforce is feature-unified
+# from the binary crate, matching the other consumers.
+bcode-sandbox = { path = "../bcode-sandbox", default-features = false }
+bcode-tools = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+
+[lints]
+workspace = true

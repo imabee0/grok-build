@@ -6,98 +6,98 @@ async-openai = { git = "https://github.com/our-forks/async-openai.git", rev = "9
 [workspace]
 resolver = "2"
 members = [
-    "crates/build/xai-proto-build",
+    "crates/build/bcode-proto-build",
     "crates/codegen/ptyctl",
     "crates/codegen/ptyctl-cli",
-    "crates/codegen/xai-acp-lib",
-    "crates/codegen/xai-agent-lifecycle",
-    "crates/codegen/xai-chat-state",
-    "crates/codegen/xai-codebase-graph",
-    "crates/codegen/xai-compaction-transcript",
-    "crates/codegen/xai-crash-handler",
-    "crates/codegen/xai-dirs",
-    "crates/codegen/xai-fast-worktree",
-    "crates/codegen/xai-file-utils",
-    "crates/codegen/xai-fsnotify",
-    "crates/codegen/xai-fuzzy-file-search",
-    "crates/codegen/xai-gix-status",
-    "crates/codegen/xai-grok-active-sessions",
-    "crates/codegen/xai-grok-agent",
-    "crates/codegen/xai-grok-announcements",
-    "crates/codegen/xai-grok-auth",
-    "crates/codegen/xai-grok-bundle",
-    "crates/codegen/xai-grok-config",
-    "crates/codegen/xai-grok-config-types",
-    "crates/codegen/xai-grok-dashboard-store",
-    "crates/codegen/xai-grok-diag-server",
-    "crates/codegen/xai-grok-env",
-    "crates/codegen/xai-grok-extra-ca",
-    "crates/codegen/xai-grok-foreign-sessions",
-    "crates/codegen/xai-grok-gboom",
-    "crates/codegen/xai-grok-hooks",
-    "crates/codegen/xai-grok-http",
-    "crates/codegen/xai-grok-markdown",
-    "crates/codegen/xai-grok-markdown-core",
-    "crates/codegen/xai-grok-mcp",
-    "crates/codegen/xai-grok-memory",
-    "crates/codegen/xai-grok-mermaid",
-    "crates/codegen/xai-grok-models",
-    "crates/codegen/xai-grok-pager",
-    "crates/codegen/xai-grok-pager-bin",
-    "crates/codegen/xai-grok-pager-diff",
-    "crates/codegen/xai-grok-pager-minimal",
-    "crates/codegen/xai-grok-pager-pty-harness",
-    "crates/codegen/xai-grok-pager-render",
-    "crates/codegen/xai-grok-paths",
-    "crates/codegen/xai-grok-plugin-marketplace",
-    "crates/codegen/xai-grok-sampler",
-    "crates/codegen/xai-grok-sampling-types",
-    "crates/codegen/xai-grok-sandbox",
-    "crates/codegen/xai-grok-secrets",
-    "crates/codegen/xai-grok-session-events",
-    "crates/codegen/xai-grok-session-search",
-    "crates/codegen/xai-grok-shared",
-    "crates/codegen/xai-grok-shell",
-    "crates/codegen/xai-grok-shell-base",
-    "crates/codegen/xai-grok-shell-session-support",
-    "crates/codegen/xai-grok-shell-terminal",
-    "crates/codegen/xai-grok-status-line",
-    "crates/codegen/xai-grok-subagent-resolution",
-    "crates/codegen/xai-grok-telemetry",
-    "crates/codegen/xai-grok-test-support",
-    "crates/codegen/xai-grok-tools",
-    "crates/codegen/xai-grok-tools-api",
-    "crates/codegen/xai-grok-update",
-    "crates/codegen/xai-grok-version",
-    "crates/codegen/xai-grok-voice",
-    "crates/codegen/xai-grok-workspace",
-    "crates/codegen/xai-grok-workspace-client",
-    "crates/codegen/xai-grok-workspace-daemon",
-    "crates/codegen/xai-grok-workspace-types",
-    "crates/codegen/xai-hooks-plugins-types",
-    "crates/codegen/xai-hunk-tracker",
-    "crates/codegen/xai-mixpanel",
-    "crates/codegen/xai-prompt-queue",
-    "crates/codegen/xai-ratatui-inline",
-    "crates/codegen/xai-ratatui-textarea",
-    "crates/codegen/xai-sqlite-journal",
-    "crates/codegen/xai-system-power",
-    "crates/codegen/xai-token-estimation",
-    "crates/codegen/xai-tracing-macros",
-    "crates/codegen/xai-tty-utils",
-    "crates/codegen/xai-workflow",
-    "crates/common/xai-circuit-breaker",
-    "crates/common/xai-computer-hub-core",
-    "crates/common/xai-computer-hub-mcp-adapter",
-    "crates/common/xai-computer-hub-sdk",
-    "crates/common/xai-grok-compaction",
-    "crates/common/xai-interjection-core",
-    "crates/common/xai-message-delivery-core",
-    "crates/common/xai-test-utils",
-    "crates/common/xai-tool-protocol",
-    "crates/common/xai-tool-runtime",
-    "crates/common/xai-tool-types",
-    "crates/common/xai-tracing",
+    "crates/codegen/bcode-acp-lib",
+    "crates/codegen/bcode-agent-lifecycle",
+    "crates/codegen/bcode-chat-state",
+    "crates/codegen/bcode-codebase-graph",
+    "crates/codegen/bcode-compaction-transcript",
+    "crates/codegen/bcode-crash-handler",
+    "crates/codegen/bcode-dirs",
+    "crates/codegen/bcode-fast-worktree",
+    "crates/codegen/bcode-file-utils",
+    "crates/codegen/bcode-fsnotify",
+    "crates/codegen/bcode-fuzzy-file-search",
+    "crates/codegen/bcode-gix-status",
+    "crates/codegen/bcode-active-sessions",
+    "crates/codegen/bcode-agent",
+    "crates/codegen/bcode-announcements",
+    "crates/codegen/bcode-auth",
+    "crates/codegen/bcode-bundle",
+    "crates/codegen/bcode-config",
+    "crates/codegen/bcode-config-types",
+    "crates/codegen/bcode-dashboard-store",
+    "crates/codegen/bcode-diag-server",
+    "crates/codegen/bcode-env",
+    "crates/codegen/bcode-extra-ca",
+    "crates/codegen/bcode-foreign-sessions",
+    "crates/codegen/bcode-gboom",
+    "crates/codegen/bcode-hooks",
+    "crates/codegen/bcode-http",
+    "crates/codegen/bcode-markdown",
+    "crates/codegen/bcode-markdown-core",
+    "crates/codegen/bcode-mcp",
+    "crates/codegen/bcode-memory",
+    "crates/codegen/bcode-mermaid",
+    "crates/codegen/bcode-models",
+    "crates/codegen/bcode-pager",
+    "crates/codegen/bcode-pager-bin",
+    "crates/codegen/bcode-pager-diff",
+    "crates/codegen/bcode-pager-minimal",
+    "crates/codegen/bcode-pager-pty-harness",
+    "crates/codegen/bcode-pager-render",
+    "crates/codegen/bcode-paths",
+    "crates/codegen/bcode-plugin-marketplace",
+    "crates/codegen/bcode-sampler",
+    "crates/codegen/bcode-sampling-types",
+    "crates/codegen/bcode-sandbox",
+    "crates/codegen/bcode-secrets",
+    "crates/codegen/bcode-session-events",
+    "crates/codegen/bcode-session-search",
+    "crates/codegen/bcode-shared",
+    "crates/codegen/bcode-shell",
+    "crates/codegen/bcode-shell-base",
+    "crates/codegen/bcode-shell-session-support",
+    "crates/codegen/bcode-shell-terminal",
+    "crates/codegen/bcode-status-line",
+    "crates/codegen/bcode-subagent-resolution",
+    "crates/codegen/bcode-telemetry",
+    "crates/codegen/bcode-test-support",
+    "crates/codegen/bcode-tools",
+    "crates/codegen/bcode-tools-api",
+    "crates/codegen/bcode-update",
+    "crates/codegen/bcode-version",
+    "crates/codegen/bcode-voice",
+    "crates/codegen/bcode-workspace",
+    "crates/codegen/bcode-workspace-client",
+    "crates/codegen/bcode-workspace-daemon",
+    "crates/codegen/bcode-workspace-types",
+    "crates/codegen/bcode-hooks-plugins-types",
+    "crates/codegen/bcode-hunk-tracker",
+    "crates/codegen/bcode-mixpanel",
+    "crates/codegen/bcode-prompt-queue",
+    "crates/codegen/bcode-ratatui-inline",
+    "crates/codegen/bcode-ratatui-textarea",
+    "crates/codegen/bcode-sqlite-journal",
+    "crates/codegen/bcode-system-power",
+    "crates/codegen/bcode-token-estimation",
+    "crates/codegen/bcode-tracing-macros",
+    "crates/codegen/bcode-tty-utils",
+    "crates/codegen/bcode-workflow",
+    "crates/common/bcode-circuit-breaker",
+    "crates/common/bcode-computer-hub-core",
+    "crates/common/bcode-computer-hub-mcp-adapter",
+    "crates/common/bcode-computer-hub-sdk",
+    "crates/common/bcode-compaction",
+    "crates/common/bcode-interjection-core",
+    "crates/common/bcode-message-delivery-core",
+    "crates/common/bcode-test-utils",
+    "crates/common/bcode-tool-protocol",
+    "crates/common/bcode-tool-runtime",
+    "crates/common/bcode-tool-types",
+    "crates/common/bcode-tracing",
     "prod/mc/cli-chat-proxy-types",
     "third_party/dagre_rust",
     "third_party/graphlib_rust",
@@ -308,68 +308,68 @@ wildmatch = "2"
 windows = { version = "0.61", features = ["Win32_Security", "Win32_Security_Authorization", "Win32_Foundation", "Win32_System_Threading", "Win32_System_JobObjects", "Win32_System_Console", "Win32_System_Pipes"] }
 wiremock = "0.6"
 wl-clipboard-rs = "0.9"
-xai-acp-lib = { path = "crates/codegen/xai-acp-lib" }
-xai-agent-lifecycle = { path = "crates/codegen/xai-agent-lifecycle" }
-xai-circuit-breaker = { path = "crates/common/xai-circuit-breaker" }
-xai-compaction-transcript = { path = "crates/codegen/xai-compaction-transcript" }
-xai-computer-hub-core = { path = "crates/common/xai-computer-hub-core" }
-xai-computer-hub-sdk = { path = "crates/common/xai-computer-hub-sdk" }
-xai-dirs = { path = "crates/codegen/xai-dirs" }
-xai-fuzzy-file-search = { path = "crates/codegen/xai-fuzzy-file-search" }
-xai-gix-status = { path = "crates/codegen/xai-gix-status" }
-xai-grok-active-sessions = { path = "crates/codegen/xai-grok-active-sessions" }
-xai-grok-agent = { path = "crates/codegen/xai-grok-agent" }
-xai-grok-announcements = { path = "crates/codegen/xai-grok-announcements" }
-xai-grok-auth = { path = "crates/codegen/xai-grok-auth" }
-xai-grok-bundle = { path = "crates/codegen/xai-grok-bundle" }
-xai-grok-config = { path = "crates/codegen/xai-grok-config" }
-xai-grok-config-types = { path = "crates/codegen/xai-grok-config-types" }
-xai-grok-dashboard-store = { path = "crates/codegen/xai-grok-dashboard-store" }
-xai-grok-diag-server = { path = "crates/codegen/xai-grok-diag-server" }
-xai-grok-env = { path = "crates/codegen/xai-grok-env" }
-xai-grok-extra-ca = { path = "crates/codegen/xai-grok-extra-ca" }
-xai-grok-foreign-sessions = { path = "crates/codegen/xai-grok-foreign-sessions" }
-xai-grok-http = { path = "crates/codegen/xai-grok-http" }
-xai-grok-markdown = { path = "crates/codegen/xai-grok-markdown" }
-xai-grok-markdown-core = { path = "crates/codegen/xai-grok-markdown-core" }
-xai-grok-mcp = { path = "crates/codegen/xai-grok-mcp" }
-xai-grok-memory = { path = "crates/codegen/xai-grok-memory" }
-xai-grok-mermaid = { path = "crates/codegen/xai-grok-mermaid" }
-xai-grok-models = { path = "crates/codegen/xai-grok-models" }
-xai-grok-sampler = { path = "crates/codegen/xai-grok-sampler" }
-xai-grok-secrets = { path = "crates/codegen/xai-grok-secrets" }
-xai-grok-session-events = { path = "crates/codegen/xai-grok-session-events" }
-xai-grok-session-search = { path = "crates/codegen/xai-grok-session-search" }
-xai-grok-shared = { path = "crates/codegen/xai-grok-shared" }
-xai-grok-shell = { path = "crates/codegen/xai-grok-shell" }
-xai-grok-shell-base = { path = "crates/codegen/xai-grok-shell-base" }
-xai-grok-shell-session-support = { path = "crates/codegen/xai-grok-shell-session-support" }
-xai-grok-shell-terminal = { path = "crates/codegen/xai-grok-shell-terminal" }
-xai-grok-status-line = { path = "crates/codegen/xai-grok-status-line" }
-xai-grok-telemetry = { path = "crates/codegen/xai-grok-telemetry" }
-xai-grok-test-support = { path = "crates/codegen/xai-grok-test-support" }
-xai-grok-tools = { path = "crates/codegen/xai-grok-tools" }
-xai-grok-tools-api = { path = "crates/codegen/xai-grok-tools-api" }
-xai-grok-version = { path = "crates/codegen/xai-grok-version" }
-xai-grok-workspace = { path = "crates/codegen/xai-grok-workspace", default-features = false }
-xai-grok-workspace-types = { path = "crates/codegen/xai-grok-workspace-types" }
-xai-hooks-plugins-types = { path = "crates/codegen/xai-hooks-plugins-types" }
-xai-interjection-core = { path = "crates/common/xai-interjection-core" }
-xai-message-delivery-core = { path = "crates/common/xai-message-delivery-core" }
-xai-mixpanel = { path = "crates/codegen/xai-mixpanel" }
-xai-prompt-queue = { path = "crates/codegen/xai-prompt-queue" }
-xai-proto-build = { path = "crates/build/xai-proto-build" }
-xai-ratatui-inline = { path = "crates/codegen/xai-ratatui-inline" }
-xai-ratatui-textarea = { path = "crates/codegen/xai-ratatui-textarea" }
-xai-sqlite-journal = { path = "crates/codegen/xai-sqlite-journal" }
-xai-system-power = { path = "crates/codegen/xai-system-power" }
-xai-test-utils = { path = "crates/common/xai-test-utils" }
-xai-token-estimation = { path = "crates/codegen/xai-token-estimation" }
-xai-tool-protocol = { path = "crates/common/xai-tool-protocol" }
-xai-tool-runtime = { path = "crates/common/xai-tool-runtime" }
-xai-tool-types = { path = "crates/common/xai-tool-types" }
-xai-tracing = { path = "crates/common/xai-tracing" }
-xai-tty-utils = { path = "crates/codegen/xai-tty-utils" }
+bcode-acp-lib = { path = "crates/codegen/bcode-acp-lib" }
+bcode-agent-lifecycle = { path = "crates/codegen/bcode-agent-lifecycle" }
+bcode-circuit-breaker = { path = "crates/common/bcode-circuit-breaker" }
+bcode-compaction-transcript = { path = "crates/codegen/bcode-compaction-transcript" }
+bcode-computer-hub-core = { path = "crates/common/bcode-computer-hub-core" }
+bcode-computer-hub-sdk = { path = "crates/common/bcode-computer-hub-sdk" }
+bcode-dirs = { path = "crates/codegen/bcode-dirs" }
+bcode-fuzzy-file-search = { path = "crates/codegen/bcode-fuzzy-file-search" }
+bcode-gix-status = { path = "crates/codegen/bcode-gix-status" }
+bcode-active-sessions = { path = "crates/codegen/bcode-active-sessions" }
+bcode-agent = { path = "crates/codegen/bcode-agent" }
+bcode-announcements = { path = "crates/codegen/bcode-announcements" }
+bcode-auth = { path = "crates/codegen/bcode-auth" }
+bcode-bundle = { path = "crates/codegen/bcode-bundle" }
+bcode-config = { path = "crates/codegen/bcode-config" }
+bcode-config-types = { path = "crates/codegen/bcode-config-types" }
+bcode-dashboard-store = { path = "crates/codegen/bcode-dashboard-store" }
+bcode-diag-server = { path = "crates/codegen/bcode-diag-server" }
+bcode-env = { path = "crates/codegen/bcode-env" }
+bcode-extra-ca = { path = "crates/codegen/bcode-extra-ca" }
+bcode-foreign-sessions = { path = "crates/codegen/bcode-foreign-sessions" }
+bcode-http = { path = "crates/codegen/bcode-http" }
+bcode-markdown = { path = "crates/codegen/bcode-markdown" }
+bcode-markdown-core = { path = "crates/codegen/bcode-markdown-core" }
+bcode-mcp = { path = "crates/codegen/bcode-mcp" }
+bcode-memory = { path = "crates/codegen/bcode-memory" }
+bcode-mermaid = { path = "crates/codegen/bcode-mermaid" }
+bcode-models = { path = "crates/codegen/bcode-models" }
+bcode-sampler = { path = "crates/codegen/bcode-sampler" }
+bcode-secrets = { path = "crates/codegen/bcode-secrets" }
+bcode-session-events = { path = "crates/codegen/bcode-session-events" }
+bcode-session-search = { path = "crates/codegen/bcode-session-search" }
+bcode-shared = { path = "crates/codegen/bcode-shared" }
+bcode-shell = { path = "crates/codegen/bcode-shell" }
+bcode-shell-base = { path = "crates/codegen/bcode-shell-base" }
+bcode-shell-session-support = { path = "crates/codegen/bcode-shell-session-support" }
+bcode-shell-terminal = { path = "crates/codegen/bcode-shell-terminal" }
+bcode-status-line = { path = "crates/codegen/bcode-status-line" }
+bcode-telemetry = { path = "crates/codegen/bcode-telemetry" }
+bcode-test-support = { path = "crates/codegen/bcode-test-support" }
+bcode-tools = { path = "crates/codegen/bcode-tools" }
+bcode-tools-api = { path = "crates/codegen/bcode-tools-api" }
+bcode-version = { path = "crates/codegen/bcode-version" }
+bcode-workspace = { path = "crates/codegen/bcode-workspace", default-features = false }
+bcode-workspace-types = { path = "crates/codegen/bcode-workspace-types" }
+bcode-hooks-plugins-types = { path = "crates/codegen/bcode-hooks-plugins-types" }
+bcode-interjection-core = { path = "crates/common/bcode-interjection-core" }
+bcode-message-delivery-core = { path = "crates/common/bcode-message-delivery-core" }
+bcode-mixpanel = { path = "crates/codegen/bcode-mixpanel" }
+bcode-prompt-queue = { path = "crates/codegen/bcode-prompt-queue" }
+bcode-proto-build = { path = "crates/build/bcode-proto-build" }
+bcode-ratatui-inline = { path = "crates/codegen/bcode-ratatui-inline" }
+bcode-ratatui-textarea = { path = "crates/codegen/bcode-ratatui-textarea" }
+bcode-sqlite-journal = { path = "crates/codegen/bcode-sqlite-journal" }
+bcode-system-power = { path = "crates/codegen/bcode-system-power" }
+bcode-test-utils = { path = "crates/common/bcode-test-utils" }
+bcode-token-estimation = { path = "crates/codegen/bcode-token-estimation" }
+bcode-tool-protocol = { path = "crates/common/bcode-tool-protocol" }
+bcode-tool-runtime = { path = "crates/common/bcode-tool-runtime" }
+bcode-tool-types = { path = "crates/common/bcode-tool-types" }
+bcode-tracing = { path = "crates/common/bcode-tracing" }
+bcode-tty-utils = { path = "crates/codegen/bcode-tty-utils" }
 zbus = { version = "5" }
 zip = "3"
 zstd = "0.13"

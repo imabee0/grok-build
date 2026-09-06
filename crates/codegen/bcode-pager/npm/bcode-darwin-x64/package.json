@@ -1,0 +1,19 @@
+{
+    "name": "@bcode-official/bcode-darwin-x64",
+    "version": "0.2.0-dev",
+    "description": "darwin-x64 binary for @bcode-official/bcode. Do not install directly; install @bcode-official/bcode instead.",
+    "license": "Apache-2.0",
+    "files": [
+        "bin/",
+        "THIRD_PARTY_NOTICES.md"
+    ],
+    "os": [
+        "darwin"
+    ],
+    "cpu": [
+        "x64"
+    ],
+    "publishConfig": {
+        "access": "public"
+    }
+}
