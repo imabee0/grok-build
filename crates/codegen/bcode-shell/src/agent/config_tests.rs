@@ -1059,6 +1059,7 @@ fn test_model_entry(
         api_key: api_key.map(|s| s.to_string()),
         env_key: env_key.map(EnvKeys::single),
         auth_provider: None,
+        account: None,
         api_base_url: api_base_url.map(|s| s.to_string()),
     }
 }
@@ -7160,6 +7161,7 @@ fn prefetch_model_entry(slug: &str, context_window: u64, api_backend: ApiBackend
         api_key: None,
         env_key: None,
         auth_provider: None,
+        account: None,
         api_base_url: None,
     }
 }
@@ -7992,4 +7994,205 @@ fn a_status_line_the_parser_could_not_read_in_full_reaches_bcode_inspect() {
         1
     );
     assert_eq!(cfg.ui.theme.as_deref(), Some("kanagawa"));
+}
+/// Two accounts, two models, both credentials live in one process: this is the
+/// claim the accounts table exists to make, so it is asserted end to end
+/// through the real parse → `resolve_model_list` → `resolve_credentials` path.
+#[test]
+#[serial]
+fn two_accounts_resolve_two_credentials_at_once() {
+    let _one = EnvGuard::set("BCODE_TEST_DS_ONE", "sk-one");
+    let _two = EnvGuard::set("BCODE_TEST_DS_TWO", "sk-two");
+    let raw_config: toml::Value = toml::from_str(
+        r#"
+            [accounts.ds-main]
+            kind = "api-key"
+            env_key = "BCODE_TEST_DS_ONE"
+
+            [accounts.ds-alt]
+            kind = "api-key"
+            env_key = "BCODE_TEST_DS_TWO"
+
+            [model.main]
+            model = "deepseek-v4-pro"
+            base_url = "https://api.deepseek.com/v1"
+            context_window = 200000
+            account = "ds-main"
+
+            [model.alt]
+            model = "deepseek-v4-pro"
+            base_url = "https://api.deepseek.com/v1"
+            context_window = 200000
+            account = "ds-alt"
+            "#,
+    )
+    .unwrap();
+    let cfg = Config::new_from_toml_cfg(&raw_config).expect("config should parse");
+    assert_eq!(cfg.accounts.len(), 2);
+    let resolved = resolve_model_list(&cfg, None);
+    let key = |id: &str| {
+        resolve_credentials(resolved.get(id).expect("model"), Some("session-bearer")).api_key
+    };
+    assert_eq!(key("main").as_deref(), Some("sk-one"));
+    assert_eq!(key("alt").as_deref(), Some("sk-two"));
+}
+/// A model's own `api_key` outranks its account, and an account outranks the
+/// session bearer.
+#[test]
+#[serial]
+fn account_sits_between_the_model_key_and_the_session_bearer() {
+    let _env = EnvGuard::set("BCODE_TEST_ACCOUNT_ONE", "sk-account");
+    let raw_config: toml::Value = toml::from_str(
+        r#"
+            [accounts.acct]
+            kind = "api-key"
+            env_key = "BCODE_TEST_ACCOUNT_ONE"
+
+            [model.own-key]
+            model = "m"
+            base_url = "https://api.example.com/v1"
+            context_window = 200000
+            api_key = "sk-model"
+            account = "acct"
+
+            [model.account-only]
+            model = "m"
+            base_url = "https://api.example.com/v1"
+            context_window = 200000
+            account = "acct"
+            "#,
+    )
+    .unwrap();
+    let cfg = Config::new_from_toml_cfg(&raw_config).expect("config should parse");
+    let resolved = resolve_model_list(&cfg, None);
+    assert_eq!(
+        resolve_credentials(resolved.get("own-key").expect("model"), None)
+            .api_key
+            .as_deref(),
+        Some("sk-model")
+    );
+    assert_eq!(
+        resolve_credentials(
+            resolved.get("account-only").expect("model"),
+            Some("session-bearer")
+        )
+        .api_key
+        .as_deref(),
+        Some("sk-account")
+    );
+}
+/// Every model on a provider inherits its account, and a model that names its
+/// own keeps it.
+#[test]
+#[serial]
+fn a_provider_account_is_inherited_unless_the_model_names_one() {
+    let _one = EnvGuard::set("BCODE_TEST_PROVIDER_ACCOUNT", "sk-provider");
+    let _two = EnvGuard::set("BCODE_TEST_MODEL_ACCOUNT", "sk-model-account");
+    let raw_config: toml::Value = toml::from_str(
+        r#"
+            [accounts.shared]
+            env_key = "BCODE_TEST_PROVIDER_ACCOUNT"
+
+            [accounts.mine]
+            env_key = "BCODE_TEST_MODEL_ACCOUNT"
+
+            [model_providers.gw]
+            base_url = "https://gateway.example/v1"
+            account = "shared"
+
+            [model.inherits]
+            model = "m"
+            model_provider = "gw"
+            context_window = 200000
+
+            [model.overrides]
+            model = "m"
+            model_provider = "gw"
+            context_window = 200000
+            account = "mine"
+            "#,
+    )
+    .unwrap();
+    let cfg = Config::new_from_toml_cfg(&raw_config).expect("config should parse");
+    let resolved = resolve_model_list(&cfg, None);
+    let key = |id: &str| resolve_credentials(resolved.get(id).expect("model"), None).api_key;
+    assert_eq!(key("inherits").as_deref(), Some("sk-provider"));
+    assert_eq!(key("overrides").as_deref(), Some("sk-model-account"));
+}
+/// A model naming an account that does not exist gets a warning and no
+/// credential -- never a silent fallback to the session bearer, which would
+/// bill an identity the user did not name.
+#[test]
+#[serial]
+fn an_undefined_account_warns_and_resolves_to_no_credential() {
+    // The last credential tier is the process-wide `BCODE_API_KEY`, so a
+    // concurrent test that sets it would hand this model a key.
+    let _no_global_key = EnvGuard::unset("BCODE_API_KEY");
+    let _no_legacy_key = EnvGuard::unset("BCODE_CODE_BCODE_API_KEY");
+    use super::super::config_model_override_parse::{ConfigWarningKind, WarningTarget};
+    let raw_config: toml::Value = toml::from_str(
+        r#"
+            [model.orphan]
+            model = "m"
+            base_url = "https://api.example.com/v1"
+            context_window = 200000
+            account = "missing"
+            "#,
+    )
+    .unwrap();
+    let cfg = Config::new_from_toml_cfg(&raw_config).expect("a typo must not fail the config");
+    assert_eq!(
+        cfg.config_warnings
+            .iter()
+            .filter(|w| w.kind == ConfigWarningKind::InvalidValue
+                && matches!(&w.target, WarningTarget::Model { key, field }
+                    if key == "orphan" && field.as_deref() == Some("account")))
+            .count(),
+        1
+    );
+    let resolved = resolve_model_list(&cfg, None);
+    let creds = resolve_credentials(
+        resolved.get("orphan").expect("model"),
+        Some("session-bearer"),
+    );
+    assert_eq!(creds.api_key, None);
+}
+/// A reserved kind parses (so the table is forward-compatible) but warns and
+/// resolves to nothing, rather than serving whatever key happens to be stored.
+#[test]
+#[serial]
+fn a_reserved_account_kind_warns_and_resolves_to_no_credential() {
+    // The last credential tier is the process-wide `BCODE_API_KEY`, so a
+    // concurrent test that sets it would hand this model a key.
+    let _no_global_key = EnvGuard::unset("BCODE_API_KEY");
+    let _no_legacy_key = EnvGuard::unset("BCODE_CODE_BCODE_API_KEY");
+    use super::super::config_model_override_parse::{ConfigWarningKind, WarningTarget};
+    let raw_config: toml::Value = toml::from_str(
+        r#"
+            [accounts.work]
+            kind = "oauth"
+
+            [model.plan]
+            model = "m"
+            base_url = "https://api.example.com/v1"
+            context_window = 200000
+            account = "work"
+            "#,
+    )
+    .unwrap();
+    let cfg = Config::new_from_toml_cfg(&raw_config).expect("config should parse");
+    assert_eq!(
+        cfg.config_warnings
+            .iter()
+            .filter(|w| w.kind == ConfigWarningKind::InvalidValue
+                && matches!(&w.target, WarningTarget::ConfigKey { path }
+                    if path == "accounts.work.kind"))
+            .count(),
+        1
+    );
+    let resolved = resolve_model_list(&cfg, None);
+    assert_eq!(
+        resolve_credentials(resolved.get("plan").expect("model"), None).api_key,
+        None
+    );
 }

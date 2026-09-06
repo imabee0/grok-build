@@ -203,6 +203,84 @@ When you override a built-in model, Bcode starts with the default configuration 
 
 ---
 
+## Accounts: several credentials at once
+
+An **account** is one credential you hold with a provider, named so a model can
+point at it. Accounts are not a way to switch identity: every account is live at
+the same time, and each request uses whichever one its model names. Two
+subagents can therefore run on two different keys concurrently.
+
+Declare the accounts, then point models at them:
+
+```toml
+[accounts.ds-main]
+kind = "api-key"
+env_key = "DEEPSEEK_API_KEY"     # read from the environment
+
+[accounts.ds-alt]
+kind = "api-key"                 # key stored by `bcode account add ds-alt`
+
+[model.deepseek-v4-pro]
+account = "ds-main"
+
+[model.ds-alt]                   # same model, the other key
+model = "deepseek-v4-pro"
+base_url = "https://api.deepseek.com/v1"
+account = "ds-alt"
+```
+
+An account resolves its key from `env_key` first, then from the key stored in
+`~/.bcode/auth.json`. Storing one:
+
+```bash
+echo "$MY_KEY" | bcode account add ds-alt   # or: bcode account add ds-alt --from-env MY_KEY
+bcode account list                          # names, kinds, where each key comes from
+bcode account remove ds-alt                 # deletes the stored key
+```
+
+The key is read from stdin rather than from an argument, so it stays out of your
+shell history and out of `ps`. It is written to `~/.bcode/auth.json`, which is
+owner-only (`0600`), and it is never printed back.
+
+A model provider can carry an account, which every model on it inherits unless
+that model names its own:
+
+```toml
+[model_providers.gateway]
+base_url = "https://gateway.example/v1"
+account = "ds-main"
+```
+
+### Routing subagents to different accounts
+
+A subagent runs the model it is given, so pointing roles at model entries with
+different accounts routes them to different credentials:
+
+```toml
+[subagents.models]
+explore = "ds-alt"          # the cheap key does the fan-out
+```
+
+### Where an account sits
+
+Credential precedence for a request, highest first:
+
+1. The model's own `api_key` / `env_key`
+2. The model's `account`
+3. The model's `auth_provider` command token
+4. The session bearer from `bcode login` (first-party endpoints only)
+5. `BCODE_API_KEY`
+
+A model naming an account that does not exist resolves with **no** credential
+rather than falling through to the session bearer, and `bcode inspect` reports
+it: billing an identity you did not name is worse than failing.
+
+`kind` accepts `api-key` today. `oauth` -- subscription sign-in, with
+`provider = "<catalog provider>"` -- is reserved: it parses, so config written
+for it keeps working, but it resolves no credential yet and says so.
+
+---
+
 ## Provider Examples
 
 ### Anthropic (Claude)

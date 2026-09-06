@@ -547,6 +547,7 @@ fn model_show_model_fingerprint_reads_catalog_flag() {
         api_key: None,
         env_key: None,
         auth_provider: None,
+        account: None,
         api_base_url: None,
     };
     flagged.info.show_model_fingerprint = true;
@@ -559,6 +560,7 @@ fn model_show_model_fingerprint_reads_catalog_flag() {
             api_key: None,
             env_key: None,
             auth_provider: None,
+            account: None,
             api_base_url: None,
         },
     );
@@ -568,6 +570,7 @@ fn model_show_model_fingerprint_reads_catalog_flag() {
         api_key: None,
         env_key: None,
         auth_provider: None,
+        account: None,
         api_base_url: None,
     };
     custom.info.show_model_fingerprint = true;
@@ -592,6 +595,7 @@ fn reasoning_effort_helpers_resolve_wire_name_to_catalog_key() {
         api_key: None,
         env_key: None,
         auth_provider: None,
+        account: None,
         api_base_url: None,
     };
     custom.info.supports_reasoning_effort = true;
@@ -836,6 +840,7 @@ fn rebuild_updates_models_and_available() {
             api_key: None,
             env_key: None,
             auth_provider: None,
+            account: None,
             api_base_url: None,
         },
     );
@@ -890,6 +895,7 @@ fn default_reasoning_effort_only_stamps_supporting_model() {
         api_key: None,
         env_key: None,
         auth_provider: None,
+        account: None,
         api_base_url: None,
     };
     reasoning_entry.info.supports_reasoning_effort = true;
@@ -912,6 +918,7 @@ fn default_reasoning_effort_only_stamps_supporting_model() {
         api_key: None,
         env_key: None,
         auth_provider: None,
+        account: None,
         api_base_url: None,
     };
     prefetched.insert("plain-model".to_string(), plain_entry);
@@ -939,6 +946,7 @@ fn reasoning_effort_override_skips_models_that_do_not_offer_level() {
         api_key: None,
         env_key: None,
         auth_provider: None,
+        account: None,
         api_base_url: None,
     };
     no_none.info.supports_reasoning_effort = true;
@@ -957,6 +965,7 @@ fn reasoning_effort_override_skips_models_that_do_not_offer_level() {
         api_key: None,
         env_key: None,
         auth_provider: None,
+        account: None,
         api_base_url: None,
     };
     with_none.info.supports_reasoning_effort = true;
@@ -1063,6 +1072,7 @@ fn cli_reasoning_effort_override_only_stamps_supporting_models() {
         api_key: None,
         env_key: None,
         auth_provider: None,
+        account: None,
         api_base_url: None,
     };
     reasoning_entry.info.supports_reasoning_effort = true;
@@ -1073,6 +1083,7 @@ fn cli_reasoning_effort_override_only_stamps_supporting_models() {
         api_key: None,
         env_key: None,
         auth_provider: None,
+        account: None,
         api_base_url: None,
     };
     prefetched.insert("plain-model".to_string(), plain_entry);
@@ -1116,6 +1127,7 @@ fn make_model_entry(model_id: &str) -> ModelEntry {
         api_key: None,
         env_key: None,
         auth_provider: None,
+        account: None,
         api_base_url: None,
     }
 }
@@ -1984,6 +1996,7 @@ async fn fetch_and_apply_degrades_offline_when_remote_fetch_disabled() {
             api_key: None,
             env_key: None,
             auth_provider: None,
+            account: None,
             api_base_url: None,
         },
     );
@@ -2012,6 +2025,7 @@ fn default_model_skips_oauth_only_for_api_key_users() {
         api_key: None,
         env_key: None,
         auth_provider: None,
+        account: None,
         api_base_url: None,
     };
     oauth_only.info.supported_in_api = false;
@@ -2022,6 +2036,7 @@ fn default_model_skips_oauth_only_for_api_key_users() {
         api_key: None,
         env_key: None,
         auth_provider: None,
+        account: None,
         api_base_url: None,
     };
     catalog.insert("public-model".to_string(), public);

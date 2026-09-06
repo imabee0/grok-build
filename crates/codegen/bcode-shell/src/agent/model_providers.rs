@@ -19,6 +19,9 @@ pub struct ModelProviderConfig {
     pub env_http_headers: IndexMap<String, String>,
     pub auth_provider: Option<String>,
     pub auth: Option<crate::auth::AuthProviderConfig>,
+    /// Name of an `[accounts.<name>]` credential every model on this provider
+    /// uses, unless the model names its own.
+    pub account: Option<String>,
     pub context_window: Option<u64>,
 }
 
@@ -183,6 +186,7 @@ impl ConfigModelOverride {
             env_http_headers,
             auth_provider,
             auth,
+            account,
             context_window,
         } = provider;
 
@@ -207,9 +211,12 @@ impl ConfigModelOverride {
             .as_deref()
             .is_some_and(|k| !k.trim().is_empty());
         let model_sets_own_env_key = self.env_key.as_ref().and_then(EnvKeys::primary).is_some();
-        let model_has_own_auth =
-            model_sets_own_api_key || model_sets_own_env_key || self.auth_provider.is_some();
+        let model_has_own_auth = model_sets_own_api_key
+            || model_sets_own_env_key
+            || self.auth_provider.is_some()
+            || self.account.is_some();
         if !model_has_own_auth {
+            merged.account = account.clone();
             merged.api_key = api_key.clone();
             merged.env_key = env_key.clone();
             merged.auth_provider = auth_provider

@@ -64,6 +64,7 @@ fn process_identity(command: Option<&Command>, is_interactive: bool) -> Option<P
             | Command::Models
             | Command::Sessions(_)
             | Command::Usage(_)
+            | Command::Account(_)
             | Command::Setup { .. }
             | Command::Share(_)
             | Command::Wrap(_)
@@ -104,6 +105,7 @@ fn command_needs_pre_sandbox_policy_heal(command: Option<&Command>) -> bool {
             | Command::Memory(_)
             | Command::Sessions(_)
             | Command::Usage(_)
+            | Command::Account(_)
             | Command::Setup { .. }
             | Command::Share(_)
             | Command::Wrap(_)
@@ -2185,6 +2187,10 @@ async fn async_main(args: PagerArgs) -> Result<()> {
                 init_tracing_simple("cli");
                 let _otel_guard = bcode_telemetry::otel_layer::otel_guard();
                 return bcode_pager::usage_cmd::run(usage_args);
+            }
+            Command::Account(account_args) => {
+                init_tracing_simple("cli");
+                return bcode_pager::account_cmd::run(account_args);
             }
             Command::Share(ref share_args) => {
                 init_tracing_simple("cli");

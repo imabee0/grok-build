@@ -1,3 +1,4 @@
+pub mod accounts;
 pub(crate) mod api_key_probe;
 pub(crate) mod attribution;
 mod auth_provider;
@@ -21,6 +22,7 @@ pub(crate) mod single_flight;
 mod storage;
 mod token_output;
 pub(crate) mod token_type;
+pub use accounts::{AccountConfig, AccountKind, AccountRef};
 pub(crate) use api_key_probe::{
     DEFAULT_PROBE_TIMEOUT, first_party_env_key_allows_advertise, should_probe_first_party_env_key,
 };

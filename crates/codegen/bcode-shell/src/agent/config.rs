@@ -1292,6 +1292,11 @@ pub struct Config {
     /// `[auth_provider.<name>]` tables, populated by [`parse_auth_providers`] from trusted config layers only.
     #[serde(skip)]
     pub auth_providers: IndexMap<String, crate::auth::AuthProviderConfig>,
+    /// `[accounts.<name>]` tables, populated by [`parse_accounts`].
+    /// Several are live at once: a model, a provider or a subagent role names
+    /// one with `account = "<name>"`.
+    #[serde(skip)]
+    pub accounts: IndexMap<String, crate::auth::AccountConfig>,
     #[serde(skip)]
     pub model_providers: IndexMap<String, ModelProviderConfig>,
     /// Written by the client via `config_toml_edit`; absorbed so it isn't flagged as an unrecognized key.
@@ -1689,6 +1694,7 @@ impl Default for Config {
             config_warnings: Vec::new(),
             bcode_com_config: BcodeComConfig::default(),
             auth_providers: IndexMap::new(),
+            accounts: IndexMap::new(),
             model_providers: IndexMap::new(),
             hints: None,
             ui: UiConfig::default(),
@@ -1823,6 +1829,84 @@ fn is_non_serde_config_path(path: &str) -> bool {
 }
 /// Parse `[auth_provider.<name>]` tables leniently: a malformed entry warns (surfaced by `bcode inspect`) and is skipped.
 /// Skipping fails closed for the models referencing the entry instead of failing the whole config.
+/// `[accounts.<name>]` tables.
+///
+/// A malformed entry is skipped with a warning rather than failing the whole
+/// config: a typo in one account must not take the others down with it.
+fn parse_accounts(
+    raw_config: &toml::Value,
+) -> (
+    IndexMap<String, crate::auth::AccountConfig>,
+    Vec<super::config_model_override_parse::ConfigWarning>,
+) {
+    use super::config_model_override_parse::{ConfigWarning, ConfigWarningKind};
+    let mut accounts = IndexMap::new();
+    let mut warnings = Vec::new();
+    let Some(section) = raw_config.get("accounts") else {
+        return (accounts, warnings);
+    };
+    let Some(table) = section.as_table() else {
+        warnings.push(ConfigWarning::config_key(
+            "accounts".to_owned(),
+            ConfigWarningKind::NotATable,
+            format!(
+                "`accounts` must be a table of [accounts.<name>] entries, got {}; \
+                 all accounts ignored",
+                section.type_str()
+            ),
+        ));
+        return (accounts, warnings);
+    };
+    for (name, value) in table {
+        if !crate::auth::accounts::is_valid_account_name(name) {
+            warnings.push(ConfigWarning::config_key(
+                format!("accounts.{name}"),
+                ConfigWarningKind::InvalidValue,
+                "invalid account name: letters, digits, '_', '-' and '.' only; account ignored"
+                    .to_owned(),
+            ));
+            continue;
+        }
+        let mut unknown = Vec::new();
+        match serde_ignored::deserialize::<_, _, crate::auth::AccountConfig>(
+            value.clone(),
+            |path| unknown.push(path.to_string()),
+        ) {
+            Ok(account) => {
+                for key in unknown {
+                    warnings.push(ConfigWarning::config_key(
+                        format!("accounts.{name}.{key}"),
+                        ConfigWarningKind::UnknownField,
+                        "unrecognized key; field ignored".to_owned(),
+                    ));
+                }
+                if !account.kind.is_implemented() {
+                    warnings.push(ConfigWarning::config_key(
+                        format!("accounts.{name}.kind"),
+                        ConfigWarningKind::InvalidValue,
+                        format!(
+                            "`{}` is reserved and not implemented yet; models on this account \
+                             resolve with no credential",
+                            account.kind.as_str()
+                        ),
+                    ));
+                }
+                accounts.insert(name.clone(), account);
+            }
+            Err(error) => {
+                warnings.push(ConfigWarning::config_key(
+                    format!("accounts.{name}"),
+                    ConfigWarningKind::InvalidValue,
+                    format!(
+                        "failed to parse ({error}); account skipped, referencing models \
+                         resolve with no credential"
+                    ),
+                ));
+            }
+        }
+    }
+    (accounts, warnings)
+}
 fn parse_auth_providers(
     raw_config: &toml::Value,
 ) -> (
@@ -1950,6 +2034,7 @@ impl Config {
             warnings: config_warnings,
         } = super::config_model_override_parse::parse_model_overrides(raw_config);
         let (mut auth_providers, auth_provider_warnings) = parse_auth_providers(raw_config);
+        let (accounts, account_warnings) = parse_accounts(raw_config);
         let (model_providers, mut model_provider_warnings) = parse_model_providers(raw_config);
         for (id, provider) in &model_providers {
             if let Some(auth) = &provider.auth {
@@ -1980,6 +2065,7 @@ impl Config {
         if let toml::Value::Table(ref mut t) = raw_without_model_sections {
             t.remove("model");
             t.remove("auth_provider");
+            t.remove("accounts");
             t.remove("model_providers");
         }
         let parsed_mcp_servers =
@@ -1997,6 +2083,7 @@ impl Config {
         config.config_models = config_models;
         config.config_warnings = config_warnings;
         config.auth_providers = auth_providers;
+        config.accounts = accounts;
         config.model_providers = model_providers;
         for spec in FEATURES {
             let Some(&value) = config.features.entries.flags.get(spec.key) else {
@@ -2005,6 +2092,7 @@ impl Config {
             config.feature_values.insert(spec.id, value);
         }
         config.config_warnings.extend(auth_provider_warnings);
+        config.config_warnings.extend(account_warnings);
         config.config_warnings.extend(model_provider_warnings);
         unrecognized_keys.sort();
         for key in unrecognized_keys {
@@ -2039,6 +2127,21 @@ impl Config {
                         format!(
                             "references [auth_provider.{name}], which is not defined; \
                              the model resolves with no provider credential"
+                        ),
+                    ),
+                );
+            }
+            if let Some(ref name) = model.account
+                && !config.accounts.contains_key(name)
+            {
+                config.config_warnings.push(
+                    super::config_model_override_parse::ConfigWarning::model(
+                        model_key,
+                        Some("account"),
+                        super::config_model_override_parse::ConfigWarningKind::InvalidValue,
+                        format!(
+                            "references [accounts.{name}], which is not defined; \
+                             the model resolves with no account credential"
                         ),
                     ),
                 );
@@ -3501,10 +3604,9 @@ pub(crate) fn resolve_model_list(
         resolved.insert(key.clone(), entry);
     }
     for (key, entry) in resolved.iter_mut() {
-        if let Some(ref mut provider) = entry.auth_provider {
-            if provider.is_fail_closed() {
-                continue;
-            }
+        if let Some(ref mut provider) = entry.auth_provider
+            && !provider.is_fail_closed()
+        {
             let config = cfg.auth_providers.get(&provider.name);
             if config.is_none() {
                 tracing::debug!(
@@ -3514,6 +3616,27 @@ pub(crate) fn resolve_model_list(
                 );
             }
             provider.attach_trusted_config(config);
+        }
+        if let Some(ref account) = entry.account {
+            match cfg.accounts.get(&account.name) {
+                Some(config) => {
+                    entry.account = Some(crate::auth::AccountRef::new(
+                        account.name.clone(),
+                        config.clone(),
+                    ));
+                }
+                None => {
+                    // An undefined account resolves to nothing rather than
+                    // falling through to the session bearer: the model named a
+                    // credential the user meant to use, and quietly billing a
+                    // different one is worse than failing.
+                    tracing::debug!(
+                        model_key = %key,
+                        account = %account.name,
+                        "account ref has no trusted config; the model resolves with no account credential"
+                    );
+                }
+            }
         }
     }
     {
@@ -3932,6 +4055,9 @@ pub struct ConfigModelOverride {
     /// Name of a `[auth_provider.<name>]` credential helper that mints this model's bearer token.
     /// Static `api_key` / `env_key` win when both are set.
     pub auth_provider: Option<String>,
+    /// Name of an `[accounts.<name>]` credential this model uses.
+    /// Static `api_key` / `env_key` win when both are set.
+    pub account: Option<String>,
     pub model_provider: Option<String>,
     pub api_base_url: Option<String>,
     pub max_completion_tokens: Option<u32>,
@@ -4077,11 +4203,17 @@ impl ConfigModelOverride {
         if let Some(ref name) = self.auth_provider {
             entry.auth_provider = Some(crate::auth::AuthProviderRef::unresolved(name.clone()));
         }
+        if let Some(ref name) = self.account {
+            entry.account = Some(crate::auth::AccountRef::unresolved(name.clone()));
+        }
         if self.api_base_url.is_some() {
             entry.api_base_url.clone_from(&self.api_base_url);
         }
         if self.supported_in_api.is_none()
-            && (self.api_key.is_some() || self.env_key.is_some() || self.auth_provider.is_some())
+            && (self.api_key.is_some()
+                || self.env_key.is_some()
+                || self.auth_provider.is_some()
+                || self.account.is_some())
         {
             entry.info.supported_in_api = true;
         }
@@ -4311,6 +4443,11 @@ pub struct ModelEntry {
     /// Config-file models only: the built-in catalog never carries one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auth_provider: Option<crate::auth::AuthProviderRef>,
+    /// Named account (`[model.<id>] account = "<name>"`), resolved against
+    /// `[accounts.<name>]` by `resolve_model_list`. Static `api_key`/`env_key`
+    /// still win: an account is the tier below them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account: Option<crate::auth::AccountRef>,
     /// When set, `base_url` is used for session auth, `api_base_url` for API-key auth.
     pub api_base_url: Option<String>,
 }
@@ -4324,6 +4461,7 @@ impl ModelEntry {
             api_key: None,
             env_key: None,
             auth_provider: None,
+            account: None,
             api_base_url: None,
         }
     }
@@ -4336,6 +4474,7 @@ impl ModelEntry {
             api_key: entry.api_key.clone(),
             env_key: entry.env_key.clone(),
             auth_provider: None,
+            account: None,
             api_base_url: entry.api_base_url.clone(),
         }
     }
@@ -4353,11 +4492,11 @@ impl ModelEntry {
         }
         self.auth_provider.as_ref()
     }
-    /// `true` when the model has a non-empty `api_key`, an `env_key` that resolves to a non-empty value, or a named auth provider.
+    /// `true` when the model has a non-empty `api_key`, an `env_key` that resolves to a non-empty value, a named account, or a named auth provider.
     /// Probes `std::env::var` at call time: result is not stable across env changes.
     /// Never executes a provider command.
     pub(crate) fn has_own_credentials(&self) -> bool {
-        self.own_credential().is_some() || self.auth_provider.is_some()
+        self.own_credential().is_some() || self.account.is_some() || self.auth_provider.is_some()
     }
 }
 impl std::ops::Deref for ModelEntry {
@@ -4730,13 +4869,23 @@ pub(crate) fn first_own_credential(
         .map(str::to_owned)
         .or_else(|| env_key.and_then(EnvKeys::resolve_value))
 }
-/// Priority: model api_key/env_key > cached auth-provider token > session token > BCODE_API_KEY.
+/// Priority: model api_key/env_key > named account > cached auth-provider token > session token > BCODE_API_KEY.
 pub(crate) fn resolve_credentials(
     model: &ModelEntry,
     session_key: Option<&str>,
 ) -> ResolvedCredentials {
     let info = model.info();
     let (api_key, base_url, auth_type) = if let Some(key) = model.own_credential() {
+        (
+            Some(key),
+            info.base_url.clone(),
+            bcode_chat_state::AuthType::ApiKey,
+        )
+    } else if let Some(key) = model
+        .account
+        .as_ref()
+        .and_then(|account| account.credential(&crate::util::bcode_home::bcode_home()))
+    {
         (
             Some(key),
             info.base_url.clone(),
@@ -5004,6 +5153,7 @@ pub(crate) fn resolve_aux_model_sampling_config(
             api_key: Some(bearer),
             env_key: None,
             auth_provider: None,
+            account: None,
             api_base_url: None,
         };
         let credentials = resolve_credentials_enforced(&entry, session_key, disable_api_key_auth);
@@ -5234,6 +5384,7 @@ fn resolve_hidden_default_web_search_sampling_config(
         api_key: None,
         env_key: None,
         auth_provider: None,
+        account: None,
         api_base_url: None,
     };
     let credentials = resolve_credentials_enforced(&entry, session_key, disable_api_key_auth);

@@ -55,6 +55,8 @@ pub enum Command {
     Sessions(crate::sessions_cmd::SessionsArgs),
     /// Print persisted token and cost usage for a session
     Usage(crate::usage_cmd::UsageArgs),
+    /// Manage named provider credentials (`account = "<name>"`)
+    Account(crate::account_cmd::AccountArgs),
     /// Fetch and install managed configuration
     Setup {
         /// Print the fetched configuration as JSON instead of installing it; writes nothing to ~/.bcode.
@@ -1409,6 +1411,49 @@ mod tests {
         let args = PagerArgs::try_parse_from(["bcode", "logout"]).expect("subcommand parses");
         assert!(matches!(args.command, Some(Command::Logout)));
         assert!(args.prompt.is_none());
+    }
+    /// The key never travels as an argument: `add` takes a name and an optional
+    /// `--from-env`, and reads the secret from stdin.
+    #[test]
+    fn account_command_parses_and_takes_no_key_argument() {
+        use crate::account_cmd::AccountCommand;
+        let add = PagerArgs::try_parse_from(["bcode", "account", "add", "ds-main"])
+            .expect("bcode account add <name>");
+        assert!(matches!(
+            add.command,
+            Some(Command::Account(crate::account_cmd::AccountArgs {
+                command: AccountCommand::Add { ref name, from_env: None },
+            })) if name == "ds-main"
+        ));
+        assert!(
+            PagerArgs::try_parse_from(["bcode", "account", "add", "ds-main", "sk-secret"]).is_err(),
+            "a key passed as an argument would land in shell history"
+        );
+        let from_env =
+            PagerArgs::try_parse_from(["bcode", "account", "add", "ds", "--from-env", "MY_KEY"])
+                .expect("bcode account add <name> --from-env <var>");
+        assert!(matches!(
+            from_env.command,
+            Some(Command::Account(crate::account_cmd::AccountArgs {
+                command: AccountCommand::Add { from_env: Some(ref var), .. },
+            })) if var == "MY_KEY"
+        ));
+        let list = PagerArgs::try_parse_from(["bcode", "account", "list", "--json"])
+            .expect("bcode account list --json");
+        assert!(matches!(
+            list.command,
+            Some(Command::Account(crate::account_cmd::AccountArgs {
+                command: AccountCommand::List { json: true },
+            }))
+        ));
+        let remove = PagerArgs::try_parse_from(["bcode", "account", "remove", "ds-main"])
+            .expect("bcode account remove <name>");
+        assert!(matches!(
+            remove.command,
+            Some(Command::Account(crate::account_cmd::AccountArgs {
+                command: AccountCommand::Remove { ref name },
+            })) if name == "ds-main"
+        ));
     }
     #[test]
     fn usage_command_parses_session_and_optional_turn() {
