@@ -151,7 +151,7 @@ pub fn bcode_binary() -> PathBuf {
         return std::path::absolute(&p).unwrap_or(p);
     }
 
-    if let Ok(path) = std::env::var("CARGO_BIN_EXE_bcode-pager") {
+    if let Ok(path) = std::env::var("CARGO_BIN_EXE_bcode") {
         let p = PathBuf::from(path);
         if p.exists() {
             return p;

@@ -990,63 +990,70 @@ mod tests {
             );
         }
     }
-    /// `parse_list_req` forces the conversations-only `kind` exactly when process chat mode is on; otherwise the client request is untouched.
+    /// `parse_list_req` leaves the client's facet filters alone.
+    ///
+    /// It rewrites `kind` only under process chat mode, and
+    /// [`crate::agent::chat_modes::process_chat_mode_enabled`] is hard-off in
+    /// this snapshot (the `--chat` frontend is not published), so the rewrite is
+    /// unreachable and every request — recognized `kind`, empty, null or
+    /// unknown — must come back exactly as it was sent. The env var is set on
+    /// the second pass to pin that: it must not resurrect the rewrite.
     #[test]
     #[serial_test::serial]
-    fn parse_list_req_forces_kind_under_process_chat_mode_only() {
-        use crate::agent::chat_modes::BCODE_CHAT_MODE_ENV;
+    fn parse_list_req_leaves_client_facet_filters_untouched() {
+        use crate::agent::chat_modes::{BCODE_CHAT_MODE_ENV, process_chat_mode_enabled};
+        assert!(
+            !process_chat_mode_enabled(),
+            "chat mode is compiled off; re-pin this test if the lane is ever published"
+        );
         let raw = serde_json::json!({
             "_meta": { "bcode.invalid/facetFilters": { "kind": ["build"], "starred": [true] } },
         })
         .to_string();
-        {
-            let _off = bcode_test_support::EnvGuard::unset(BCODE_CHAT_MODE_ENV);
+        for chat_env in [None, Some("1")] {
+            let _guard = match chat_env {
+                Some(v) => bcode_test_support::EnvGuard::set(BCODE_CHAT_MODE_ENV, v),
+                None => bcode_test_support::EnvGuard::unset(BCODE_CHAT_MODE_ENV),
+            };
             let req = parse_list_req(&raw).expect("parse");
             let parsed = ParsedMeta::parse(req.meta.as_ref());
             assert_eq!(
                 parsed.facet_filters.get(KIND_FACET_KEY),
                 Some(&vec![serde_json::json!("build")]),
-                "non-chat: client kind filter untouched"
-            );
-        }
-        {
-            let _on = bcode_test_support::EnvGuard::set(BCODE_CHAT_MODE_ENV, "1");
-            let req = parse_list_req(&raw).expect("parse");
-            let parsed = ParsedMeta::parse(req.meta.as_ref());
-            let expected_build = if cfg!(feature = "local-workspace") {
-                Some(&vec![serde_json::json!("build")])
-            } else {
-                Some(&vec![serde_json::json!("build")])
-            };
-            assert_eq!(
-                parsed.facet_filters.get(KIND_FACET_KEY),
-                expected_build,
-                "client kind=build under process chat mode"
+                "client kind filter untouched ({chat_env:?})"
             );
             assert_eq!(
                 parsed.facet_filters.get("starred"),
                 Some(&vec![serde_json::json!(true)]),
-                "other facets pass through"
+                "other facets pass through ({chat_env:?})"
             );
             let req = parse_list_req("{}").expect("parse");
             let parsed = ParsedMeta::parse(req.meta.as_ref());
-            let expected = None;
             assert_eq!(
                 parsed.facet_filters.get(KIND_FACET_KEY),
-                expected,
-                "absent client kind still forces chat under process chat mode"
+                None,
+                "absent client kind stays absent ({chat_env:?})"
             );
-            for bad in [
-                serde_json::json!({ "_meta": { "bcode.invalid/facetFilters": { "kind": [] } } }),
-                serde_json::json!({ "_meta": { "bcode.invalid/facetFilters": { "kind": null } } }),
-                serde_json::json!({ "_meta": { "bcode.invalid/facetFilters": { "kind": ["other"] } } }),
+            for (bad, expected) in [
+                (
+                    serde_json::json!({ "_meta": { "bcode.invalid/facetFilters": { "kind": [] } } }),
+                    vec![],
+                ),
+                (
+                    serde_json::json!({ "_meta": { "bcode.invalid/facetFilters": { "kind": null } } }),
+                    vec![serde_json::Value::Null],
+                ),
+                (
+                    serde_json::json!({ "_meta": { "bcode.invalid/facetFilters": { "kind": ["other"] } } }),
+                    vec![serde_json::json!("other")],
+                ),
             ] {
                 let req = parse_list_req(&bad.to_string()).expect("parse");
                 let parsed = ParsedMeta::parse(req.meta.as_ref());
                 assert_eq!(
                     parsed.facet_filters.get(KIND_FACET_KEY),
-                    expected,
-                    "empty/null/unknown kind must still force chat: {bad}"
+                    Some(&expected),
+                    "empty/null/unknown kind passes through verbatim: {bad}"
                 );
             }
         }

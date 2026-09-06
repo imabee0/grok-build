@@ -370,9 +370,23 @@ mod tests {
         }
     }
 
+    /// The tokenizer path reaches for the baked catalog default, so pin what
+    /// that default *is*: a DeepSeek row, capped at the 500k window the fork
+    /// chose. The id itself is catalog data and may be revised; the contract
+    /// that the shipped default is DeepSeek at 500k is not.
     #[test]
     fn tokenize_uses_baked_product_default_model() {
-        assert_eq!(crate::models::default_model(), "bcode-4.6");
+        let id = crate::models::default_model();
+        let catalog: serde_json::Value =
+            serde_json::from_str(bcode_models::DEFAULT_MODELS_JSON).expect("catalog parses");
+        let entry = catalog["models"]
+            .as_array()
+            .expect("models array")
+            .iter()
+            .find(|m| m["id"] == serde_json::json!(id))
+            .unwrap_or_else(|| panic!("catalog default {id} has no entry"));
+        assert_eq!(entry["model_family"], serde_json::json!("deepseek"));
+        assert_eq!(entry["context_window"], serde_json::json!(500_000));
     }
 
     #[test]
