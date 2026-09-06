@@ -1,0 +1,17 @@
+bcode
+
+This product includes software developed at SpaceXAI (https://x.ai/), from the
+grok-build project (https://github.com/xai-org/grok-build), licensed under the
+Apache License, Version 2.0.
+
+Copyright 2023-2026 SpaceXAI
+
+Files derived from that project have been modified. The modifications rebrand
+the software, remove first-party telemetry and network calls, and add
+multi-provider, multi-account, pricing and usage functionality. See the
+repository history for details.
+
+This project is not affiliated with, endorsed by, or sponsored by SpaceXAI.
+Trademarks are the property of their respective owners and are used, where they
+appear at all, only to identify the API endpoints and model identifiers this
+software can be configured to communicate with.

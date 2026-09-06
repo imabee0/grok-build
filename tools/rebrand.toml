@@ -1,0 +1,162 @@
+# Rebrand rules: upstream identifiers -> bcode identifiers.
+#
+# Rules are applied IN ORDER to file contents and to path segments, so
+# longer/more specific patterns MUST come before the prefixes they contain.
+# The codemod is regenerated from `vendor` on every sync (see tools/sync-upstream.sh),
+# so this file is the single source of truth for the rename.
+
+# Paths the codemod must not touch. Either they are ours already, or they are
+# the two allowlisted places upstream identifiers are legitimately data
+# (see tools/verify-no-upstream-brand.sh).
+skip_paths = [
+  ".git/",
+  "tools/",
+  "Makefile",
+  "AGENTS.md",
+  "CLAUDE.md",
+  "LICENSE",
+  "NOTICE",
+  "THIRD-PARTY-NOTICES",
+  "SOURCE_REV",
+]
+
+# Contents preserved, but the path is still renamed. The provider registry and
+# model catalog holds endpoints and wire model ids as data (see the brand gate).
+skip_content = [
+  "crates/codegen/xai-grok-models/default_models.json",
+  "crates/codegen/bcode-models/default_models.json",
+]
+
+# Binary file extensions: renamed on disk but never content-rewritten.
+binary_exts = [".png", ".jpg", ".jpeg", ".gif", ".ico", ".webp", ".zip", ".gz", ".woff", ".woff2", ".ttf", ".otf", ".pdf", ".wasm"]
+
+# --- Endpoints and domains -------------------------------------------------
+# Rewritten to placeholders that fail loudly rather than silently pointing at a
+# plausible-looking domain. Real provider endpoints are reintroduced as catalog
+# data (plan section 4); these call-home hosts are removed outright (section 3).
+[[rule]]
+from = "cli-chat-proxy.grok.com"
+to   = "cli-chat-proxy.invalid"
+[[rule]]
+from = "assets.grok.com"
+to   = "assets.invalid"
+[[rule]]
+from = "code.grok.com"
+to   = "code.invalid"
+[[rule]]
+from = "accounts.x.ai"
+to   = "accounts.invalid"
+[[rule]]
+from = "auth.x.ai"
+to   = "auth.invalid"
+[[rule]]
+from = "api.x.ai"
+to   = "api.invalid"
+[[rule]]
+from = "API.X.AI"
+to   = "API.INVALID"
+[[rule]]
+from = "X.AI"
+to   = "BCODE.INVALID"
+[[rule]]
+from = "console.x.ai"
+to   = "console.invalid"
+[[rule]]
+from = "media.x.ai"
+to   = "media.invalid"
+[[rule]]
+from = "docs.x.ai"
+to   = "docs.invalid"
+[[rule]]
+from = "grok.com"
+to   = "bcode.invalid"
+[[rule]]
+from = "x.ai"
+to   = "bcode.invalid"
+# macOS MDM preference domain.
+[[rule]]
+from = "ai.x.grok"
+to   = "dev.bcode.cli"
+
+# --- Crate and module identifiers ------------------------------------------
+[[rule]]
+from = "xai_grok_"
+to   = "bcode_"
+[[rule]]
+from = "xai-grok-"
+to   = "bcode-"
+[[rule]]
+from = "XAI_GROK_"
+to   = "BCODE_"
+[[rule]]
+from = "xai_grok"
+to   = "bcode"
+[[rule]]
+from = "xai-grok"
+to   = "bcode"
+# Remaining `xai-*` / `xai_*` leaf crates (xai-dirs, xai-tool-types, ...).
+[[rule]]
+from = "xai_"
+to   = "bcode_"
+[[rule]]
+from = "xai-"
+to   = "bcode-"
+[[rule]]
+from = "XAI_"
+to   = "BCODE_"
+
+# --- Product name ----------------------------------------------------------
+[[rule]]
+from = "grok-build"
+to   = "bcode"
+[[rule]]
+from = "grok_build"
+to   = "bcode"
+[[rule]]
+from = "GROK_BUILD"
+to   = "BCODE"
+[[rule]]
+from = "Grok Build"
+to   = "bcode"
+[[rule]]
+from = "GrokBuild"
+to   = "Bcode"
+[[rule]]
+from = "SpaceXAI"
+to   = "bcode"
+[[rule]]
+from = "spacexai"
+to   = "bcode"
+[[rule]]
+from = "SPACEXAI"
+to   = "BCODE"
+[[rule]]
+from = "GROK_"
+to   = "BCODE_"
+[[rule]]
+from = "grok_"
+to   = "bcode_"
+[[rule]]
+from = "grok-"
+to   = "bcode-"
+[[rule]]
+from = "Grok"
+to   = "Bcode"
+[[rule]]
+from = "GROK"
+to   = "BCODE"
+[[rule]]
+from = "grok"
+to   = "bcode"
+[[rule]]
+from = "xAI"
+to   = "bcode"
+[[rule]]
+from = "XAI"
+to   = "BCODE"
+[[rule]]
+from = "Xai"
+to   = "Bcode"
+[[rule]]
+from = "xai"
+to   = "bcode"
