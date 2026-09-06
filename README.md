@@ -1,140 +1,86 @@
-<div align="center">
+# bcode
 
-<h1>
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://media.invalid/v1/website/spacebcode-symbol-white-transparent-0c31957f.png">
-    <source media="(prefers-color-scheme: light)" srcset="https://media.invalid/v1/website/spacebcode-symbol-black-transparent-6435cf42.png">
-    <img alt="bcode logo" src="https://media.invalid/v1/website/spacebcode-symbol-black-transparent-6435cf42.png" width="96">
-  </picture>
-  <br>
-  bcode (<code>bcode</code>)
-</h1>
+A terminal AI coding agent. Full-screen TUI, subagents, hooks, skills,
+sandboxing, and headless mode for scripting — with the model provider left
+entirely up to you.
 
-**bcode** is bcode's terminal-based AI coding agent. It runs as a
-full-screen TUI that understands your codebase, edits files, executes shell
-commands, searches the web, and manages long-running tasks — interactively,
-headlessly for scripting/CI, or embedded in editors via the Agent Client
-Protocol (ACP).
+bcode is a downstream fork of an Apache-2.0 upstream (credited in
+[`NOTICE`](NOTICE)), rebranded and made provider-neutral. DeepSeek, OpenAI and
+others are peers: none is privileged, none is assumed, and nothing phones home.
 
-[Installing the released binary](#installing-the-released-binary) ·
-[Building from source](#building-from-source) ·
-[Documentation](#documentation) ·
-[Repository layout](#repository-layout) ·
-[Development](#development) ·
-[Contributing](#contributing) ·
-[License](#license)
+> Status: early. The fork's structure and build are in place; the
+> multi-provider, multi-account, pricing and usage work is in progress.
 
-![bcode TUI](https://media.invalid/v1/website/universe-tui-screenshot-6f7a0837.png)
+## Why
 
-**Learn more about bcode at [bcode.invalid/cli](https://bcode.invalid/cli)**
+Existing terminal agents force a trade: a good harness tied to one vendor, or a
+provider-neutral tool with a weaker harness. bcode takes a strong harness and
+removes the vendor coupling.
 
-This repository contains the Rust source for the `bcode` CLI/TUI and its agent
-runtime. It is synced periodically from the bcode monorepo.
+- **Any provider.** OpenAI Chat Completions, OpenAI Responses, and Anthropic
+  Messages wire formats, so most endpoints work with a config block.
+- **Several accounts at once.** Not "switch accounts" — multiple credentials
+  live simultaneously, and different subagents can run on different ones.
+- **Honest usage.** Session tokens split cached vs uncached, and spend priced
+  locally per call at the rate in force when the call was made.
+- **Quiet by default.** No telemetry, no announcements, no update check, no
+  remote settings. The only network calls are the ones your provider needs.
+- **Stays out of the way.** bcode writes under `~/.bcode` and nowhere else. An
+  existing agent CLI on the same machine is left byte-identical.
 
-A small `SOURCE_REV` file at the root records the full monorepo commit SHA
-for the version of the code present in this tree.
+## Building
 
-</div>
-
----
-
-## Installing the released binary
-
-Prebuilt binaries are published for macOS, Linux, and Windows:
+Requires the Rust toolchain pinned by [`rust-toolchain.toml`](rust-toolchain.toml)
+(rustup installs it on first build) and `protoc` on `PATH`.
 
 ```sh
-curl -fsSL https://bcode.invalid/cli/install.sh | bash   # macOS / Linux / Git Bash
-irm https://bcode.invalid/cli/install.ps1 | iex          # Windows PowerShell
-bcode --version
+cargo build -p bcode-pager-bin --release   # -> target/release/bcode
+cargo run -p bcode-pager-bin               # build and launch the TUI
+make verify                                # the ship gate
 ```
 
-See the [changelog](https://bcode.invalid/build/changelog) for the latest fixes,
-features, and improvements in each release.
+The workspace is 94 crates and a full build is slow. Scope your work:
+`cargo check -p <crate>`.
 
-## Building from source
-
-Requirements:
-
-- **Rust** — the toolchain is pinned by [`rust-toolchain.toml`](rust-toolchain.toml);
-  `rustup` installs it automatically on first build.
-- **[DotSlash](https://dotslash-cli.com)** — required so hermetic tools under
-  [`bin/`](bin/) (notably [`bin/protoc`](bin/protoc)) can download and run.
-  Install it and ensure `dotslash` is on your `PATH` **before** building:
-
-  ```sh
-  cargo install dotslash
-  # or: prebuilt packages — https://dotslash-cli.com/docs/installation/
-  /usr/bin/env dotslash --help   # sanity check
-  ```
-
-- **protoc** — proto codegen resolves [`bin/protoc`](bin/protoc) via DotSlash,
-  or falls back to a `protoc` on `PATH` / `$PROTOC`.
-- macOS and Linux are supported build hosts; Windows builds are best-effort
-  and not currently tested from this tree.
-
-```sh
-cargo run -p bcode-pager-bin              # build + launch the TUI
-cargo build -p bcode-pager-bin --release  # release binary: target/release/bcode-pager
-cargo check -p bcode-pager-bin            # fast validation
-```
-
-The binary artifact is named `bcode-pager`; official installs ship it as
-`bcode`. On first launch it opens your browser to authenticate — see the
-[authentication guide](crates/codegen/bcode-pager/docs/user-guide/02-authentication.md).
-
-## Documentation
-
-Full online documentation is available at
-[docs.invalid/build/overview](https://docs.invalid/build/overview).
-
-The user guide ships with the pager crate:
-[`crates/codegen/bcode-pager/docs/user-guide/`](crates/codegen/bcode-pager/docs/user-guide/)
-— getting started, keyboard shortcuts, slash commands, configuration, theming,
-MCP servers, skills, plugins, hooks, headless mode, sandboxing, and more.
-
-## Repository layout
+## Layout
 
 | Path | Contents |
-|------|----------|
-| `crates/codegen/bcode-pager-bin` | Composition-root package; builds the `bcode-pager` binary |
-| `crates/codegen/bcode-pager` | The TUI: scrollback, prompt, modals, rendering |
-| `crates/codegen/bcode-shell` | Agent runtime + leader/stdio/headless entry points |
-| `crates/codegen/bcode-tools` | Tool implementations (terminal, file edit, search, ...) |
-| `crates/codegen/bcode-workspace` | Host filesystem, VCS, execution, checkpoints |
-| `crates/codegen/...` | The rest of the CLI crate closure (config, MCP, markdown, sandbox, ...) |
-| `crates/common/`, `crates/build/`, `prod/mc/` | Small shared leaf crates pulled in by the closure |
-| `third_party/` | Vendored upstream source (Mermaid diagram stack) — see below |
+| --- | --- |
+| `crates/codegen/bcode-pager-bin` | Composition root; builds the `bcode` binary |
+| `crates/codegen/bcode-pager` | TUI: scrollback, prompt, modals, status line |
+| `crates/codegen/bcode-shell` | Agent runtime, auth, sampling, sessions |
+| `crates/codegen/bcode-models` | Provider registry and model catalog (data) |
+| `crates/codegen/bcode-tools` | Tool implementations |
+| `tools/` | Rebrand codemod, brand gate, upstream sync |
+| `third_party/` | Vendored upstream source (Mermaid diagram stack) |
 
-> [!IMPORTANT]
-> The root `Cargo.toml` (workspace members, dependency versions, lints,
-> profiles) is **generated** — treat it as read-only. Prefer editing per-crate
-> `Cargo.toml` files.
+## How the fork tracks upstream
 
-## Development
+Upstream publishes roughly one squashed snapshot commit per day, so a
+merge-based fork would re-resolve a 2,000-file rename on every drop. Instead:
 
-```sh
-cargo check -p <crate>        # always target specific crates; full-workspace builds are slow
-cargo test -p bcode-config # per-crate tests
-cargo clippy -p <crate>       # lint config: clippy.toml at the repo root
-cargo fmt --all               # rustfmt.toml at the repo root
+```
+vendor ──────────●───────────●        pristine upstream snapshots
+                  \           \
+                   ● rebrand   ● rebrand    regenerated, never merged
+                    \           \
+                     ●─●─●       ●─●─●      feature commits, rebased
 ```
 
-## Contributing
+`make sync` fetches a new snapshot, regenerates the rebrand commit from
+[`tools/rebrand.toml`](tools/rebrand.toml), replays the feature stack, and runs
+the verify gate. Because the rebrand is regenerated rather than merged forward,
+it cannot conflict — only the small feature stack rebases.
 
-> [!NOTE]
-> External contributions are not accepted. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
+See [`AGENTS.md`](AGENTS.md) for the working agreement and invariants.
 
 ## License
 
-First-party code in this repository is licensed under the **Apache License,
-Version 2.0** — see [`LICENSE`](LICENSE).
+Apache-2.0 — see [`LICENSE`](LICENSE). Upstream copyright and the change notice
+required by Apache-2.0 §4(b) are in [`NOTICE`](NOTICE). Third-party and vendored
+code remains under its original licenses; see
+[`THIRD-PARTY-NOTICES`](THIRD-PARTY-NOTICES) and
+[`third_party/NOTICE`](third_party/NOTICE).
 
-Third-party and vendored code remains under its original licenses. See:
-
-- [`THIRD-PARTY-NOTICES`](THIRD-PARTY-NOTICES) — crates.io / git dependencies,
-  bundled UI themes, and **in-tree source ports** (including openai/codex and
-  sst/opencode tool implementations)
-- [`crates/codegen/bcode-tools/THIRD_PARTY_NOTICES.md`](crates/codegen/bcode-tools/THIRD_PARTY_NOTICES.md)
-  — crate-local notice for the codex and opencode ports (license texts +
-  Apache §4(b) change notice)
-- [`third_party/NOTICE`](third_party/NOTICE) — vendored Mermaid-stack index
+bcode is not affiliated with, endorsed by, or sponsored by any model provider it
+can be configured to use.
