@@ -792,6 +792,11 @@ fn committed_edit_keeps_diff_line_backgrounds() {
     use ratatui::layout::Rect;
     use similar::ChangeTag;
 
+    // `Theme::current()` is process-global, and the sibling tests here flip the
+    // terminal-native lock, which paints no diff backgrounds at all. Pin the
+    // theme for this test's duration rather than race them.
+    let _theme = bcode_pager::theme::cache::pin_theme();
+
     let hunk = vec![
         DiffLine {
             text: "let x = 1;\n".into(),
