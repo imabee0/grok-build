@@ -1,80 +1,147 @@
 {
-  "default": "grok-4.6",
-  "web_search": "grok-4.6",
-  "image_description": "grok-4.6",
-  "session_summary": "grok-4.6",
+  "_comment": [
+    "Provider registry and model catalog. This file is DATA: it is the one place",
+    "provider endpoints and wire model ids may appear, and the brand gate",
+    "allowlists it for that reason. Delete a provider's entries and the tree has",
+    "literal zero occurrences of that provider.",
+    "",
+    "",
+    "env_key names the environment variable holding that provider's key. It is",
+    "the provider's own conventional name, not a bcode one, so an existing",
+    "key in your shell, under the provider's usual variable name, just works.",
+    "context_window is the window bcode will USE, which is not always the window",
+    "the provider offers. DeepSeek v4 accepts 1M tokens; we cap at 500k because",
+    "quality degrades well before the limit. Raise it per model with",
+    "[model.<id>].context_window if you disagree.",
+    "",
+    "Prices are not here -- see the pricing table (crate bcode-pricing)."
+  ],
+  "default": "deepseek-v4-pro",
+  "web_search": "deepseek-v4-flash",
+  "image_description": "deepseek-v4-flash-vision-exp",
+  "session_summary": "deepseek-v4-flash",
   "models": [
+    {
+      "id": "deepseek-v4-pro",
+      "model": "deepseek-v4-pro",
+      "model_family": "deepseek",
+      "name": "DeepSeek V4 Pro",
+      "description": "DeepSeek's frontier model; thinking mode by default",
+      "base_url": "https://api.deepseek.com/v1",
+      "env_key": "DEEPSEEK_API_KEY",
+      "api_backend": "chat_completions",
+      "context_window": 500000,
+      "max_completion_tokens": 65536,
+      "system_prompt_label": "bcode",
+      "supports_reasoning_effort": false,
+      "auto_compact_threshold_percent": 85,
+      "compaction_at_tokens": true,
+      "compactions_remaining": 1
+    },
+    {
+      "id": "deepseek-v4-flash",
+      "model": "deepseek-v4-flash",
+      "model_family": "deepseek",
+      "name": "DeepSeek V4 Flash",
+      "description": "Faster and cheaper; thinking and non-thinking modes",
+      "base_url": "https://api.deepseek.com/v1",
+      "env_key": "DEEPSEEK_API_KEY",
+      "api_backend": "chat_completions",
+      "context_window": 500000,
+      "max_completion_tokens": 65536,
+      "system_prompt_label": "bcode",
+      "supports_reasoning_effort": false,
+      "auto_compact_threshold_percent": 85,
+      "compaction_at_tokens": true,
+      "compactions_remaining": 1
+    },
+    {
+      "id": "deepseek-v4-flash-vision-exp",
+      "model": "deepseek-v4-flash-vision-exp",
+      "model_family": "deepseek",
+      "name": "DeepSeek V4 Flash Vision (exp)",
+      "description": "Flash with vision; experimental, no FIM",
+      "base_url": "https://api.deepseek.com/v1",
+      "env_key": "DEEPSEEK_API_KEY",
+      "api_backend": "chat_completions",
+      "context_window": 500000,
+      "max_completion_tokens": 65536,
+      "system_prompt_label": "bcode",
+      "supports_reasoning_effort": false,
+      "auto_compact_threshold_percent": 85,
+      "compaction_at_tokens": true,
+      "compactions_remaining": 1,
+      "hidden": true
+    },
+    {
+      "id": "gpt-5.2-codex",
+      "model": "gpt-5.2-codex",
+      "model_family": "openai",
+      "name": "GPT-5.2 Codex",
+      "description": "OpenAI, via API key or a ChatGPT subscription",
+      "base_url": "https://api.openai.com/v1",
+      "env_key": "OPENAI_API_KEY",
+      "api_backend": "responses",
+      "context_window": 400000,
+      "system_prompt_label": "bcode",
+      "supports_reasoning_effort": true,
+      "reasoning_effort": "medium",
+      "reasoning_efforts": [
+        {
+          "value": "high",
+          "label": "High Effort",
+          "description": "Extensive reasoning"
+        },
+        {
+          "value": "medium",
+          "label": "Medium Effort",
+          "description": "Balanced",
+          "default": true
+        },
+        {
+          "value": "low",
+          "label": "Low Effort",
+          "description": "Quick"
+        }
+      ],
+      "auto_compact_threshold_percent": 85,
+      "compaction_at_tokens": true,
+      "compactions_remaining": 1
+    },
     {
       "id": "grok-4.6",
       "model": "grok-4.6",
       "model_family": "xai",
       "name": "Grok 4.6",
-      "description": "SpaceXAI's latest frontier model",
-      "context_window": 500000,
+      "description": "xAI, via API key or an xAI subscription",
+      "base_url": "https://api.x.ai/v1",
+      "env_key": "XAI_API_KEY",
       "api_backend": "responses",
-      "supports_backend_search": true,
-      "system_prompt_label": "Grok 4.6",
+      "context_window": 500000,
+      "system_prompt_label": "bcode",
       "supports_reasoning_effort": true,
       "reasoning_effort": "high",
-      "auto_compact_threshold_percent": 80,
-      "compaction_at_tokens": true,
-      "compactions_remaining": 1,
       "reasoning_efforts": [
-        {
-          "value": "xhigh",
-          "label": "Extra High Effort",
-          "description": "Highest effort and reasoning level"
-        },
         {
           "value": "high",
           "label": "High Effort",
-          "description": "Higher implementation quality with extensive reasoning",
+          "description": "Extensive reasoning",
           "default": true
         },
         {
           "value": "medium",
           "label": "Medium Effort",
-          "description": "Balanced effort with standard implementation and testing"
+          "description": "Balanced"
         },
         {
           "value": "low",
           "label": "Low Effort",
-          "description": "Quick, fast implementations"
+          "description": "Quick"
         }
-      ]
-    },
-    {
-      "id": "grok-4.5",
-      "model": "grok-4.5",
-      "model_family": "xai",
-      "name": "Grok 4.5",
-      "context_window": 500000,
-      "api_backend": "responses",
-      "supports_backend_search": false,
-      "system_prompt_label": "Grok 4.5",
-      "supports_reasoning_effort": true,
-      "reasoning_effort": "high",
-      "auto_compact_threshold_percent": 80,
+      ],
+      "auto_compact_threshold_percent": 85,
       "compaction_at_tokens": true,
-      "compactions_remaining": 1,
-      "reasoning_efforts": [
-        {
-          "value": "high",
-          "label": "High Effort",
-          "description": "Highest implementation quality with extensive reasoning",
-          "default": true
-        },
-        {
-          "value": "medium",
-          "label": "Medium Effort",
-          "description": "Balanced effort with standard implementation and testing"
-        },
-        {
-          "value": "low",
-          "label": "Low Effort",
-          "description": "Quick, fast implementations"
-        }
-      ]
+      "compactions_remaining": 1
     }
   ]
 }

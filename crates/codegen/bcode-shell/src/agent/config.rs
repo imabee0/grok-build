@@ -3702,6 +3702,13 @@ struct DefaultModelJson {
     auto_compact_threshold_percent: Option<u8>,
     #[serde(default)]
     system_prompt_label: Option<String>,
+    /// Provider endpoint for this entry. Absent falls back to the configured
+    /// endpoints, so a catalog can mix providers without a global base URL.
+    #[serde(default)]
+    base_url: Option<String>,
+    /// Environment variable(s) holding this provider's API key.
+    #[serde(default)]
+    env_key: Option<EnvKeys>,
 }
 fn default_models(endpoints: &EndpointsConfig) -> IndexMap<String, ModelEntryConfig> {
     let root: serde_json::Value = serde_json::from_str(crate::models::DEFAULT_MODELS_JSON)
@@ -3732,7 +3739,10 @@ fn default_models(endpoints: &EndpointsConfig) -> IndexMap<String, ModelEntryCon
                 id: m.id,
                 model: m.model,
                 model_family: m.model_family,
-                base_url: endpoints.resolve_inference_base_url(),
+                base_url: m
+                    .base_url
+                    .clone()
+                    .unwrap_or_else(|| endpoints.resolve_inference_base_url()),
                 api_base_url: Some(endpoints.bcode_api_base_url.clone()),
                 name: m.name,
                 description: m.description,
@@ -3749,7 +3759,7 @@ fn default_models(endpoints: &EndpointsConfig) -> IndexMap<String, ModelEntryCon
                 max_retries: None,
                 subagent_rate_limit_max_attempts: None,
                 api_key: None,
-                env_key: None,
+                env_key: m.env_key.clone(),
                 extra_headers: IndexMap::new(),
                 use_concise: false,
                 hidden: m.hidden,
