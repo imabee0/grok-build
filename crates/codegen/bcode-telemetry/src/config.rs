@@ -174,27 +174,16 @@ pub struct TelemetryConfig {
     pub otel_metrics_client_key: Option<String>,
     pub otel_metrics_include_session_id: Option<bool>,
 }
-fn internal_defaults() -> (Option<String>, Option<String>, Option<String>, bool) {
-    (None, None, None, false)
-}
-fn build_env_default(value: Option<&'static str>) -> Option<String> {
-    value
-        .map(str::trim)
-        .filter(|v| !v.is_empty())
-        .map(str::to_owned)
-}
+
 impl Default for TelemetryConfig {
     fn default() -> Self {
-        let (baked_url, baked_key, baked_token, baked_enabled) = internal_defaults();
-        let build_url = build_env_default(option_env!("BCODE_TELEMETRY_BUILD_EVENTS_URL"));
-        let build_key = build_env_default(option_env!("BCODE_TELEMETRY_BUILD_EVENTS_API_KEY"));
-        let build_token = build_env_default(option_env!("BCODE_TELEMETRY_BUILD_MIXPANEL_TOKEN"));
-        let mixpanel_enabled = baked_enabled || build_token.is_some();
-        let (events_url, events_api_key, mixpanel_token) = (
-            build_url.or(baked_url),
-            build_key.or(baked_key),
-            build_token.or(baked_token),
-        );
+        // First-party product analytics are removed, not merely unconfigured: the
+        // build-time BCODE_TELEMETRY_BUILD_* overrides are deliberately not read, so
+        // no build of bcode can be given an events endpoint or a Mixpanel token.
+        // The external OTEL exporter below is unaffected -- it is opt-in and points
+        // at the operator's own collector.
+        let (events_url, events_api_key, mixpanel_token) = (None, None, None);
+        let mixpanel_enabled = false;
         Self {
             enabled: None,
             events_url,
@@ -292,22 +281,14 @@ pub fn deployment_id_from_key(key: &str) -> String {
 mod tests {
     use super::*;
     #[test]
-    fn build_env_default_normalizes() {
-        assert_eq!(build_env_default(None), None);
-        assert_eq!(build_env_default(Some("")), None);
-        assert_eq!(build_env_default(Some(" \t ")), None);
-        assert_eq!(build_env_default(Some(" key ")), Some("key".to_owned()));
-    }
-    #[test]
-    fn default_is_build_env_layer_when_feature_off() {
+    fn first_party_analytics_cannot_be_configured_at_build_time() {
+        // Guards the removal: if someone reinstates the build-time overrides, this
+        // fails rather than silently shipping a binary that phones home.
         let cfg = TelemetryConfig::default();
-        let url = build_env_default(option_env!("BCODE_TELEMETRY_BUILD_EVENTS_URL"));
-        let key = build_env_default(option_env!("BCODE_TELEMETRY_BUILD_EVENTS_API_KEY"));
-        let token = build_env_default(option_env!("BCODE_TELEMETRY_BUILD_MIXPANEL_TOKEN"));
-        assert_eq!(cfg.mixpanel_enabled, token.is_some());
-        assert_eq!(cfg.events_url, url);
-        assert_eq!(cfg.events_api_key, key);
-        assert_eq!(cfg.mixpanel_token, token);
+        assert!(!cfg.mixpanel_enabled);
+        assert_eq!(cfg.events_url, None);
+        assert_eq!(cfg.events_api_key, None);
+        assert_eq!(cfg.mixpanel_token, None);
     }
     #[test]
     fn otel_timeout_fields_accept_int_or_string() {

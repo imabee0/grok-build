@@ -680,7 +680,10 @@ pub async fn run_update_if_available(
     }
 
     // Resolve effective auto_update: None defaults to true (first-run).
-    let auto_update = current_config.cli.auto_update.unwrap_or(true);
+    // Default OFF. bcode does not distribute binaries, and an update check is a
+    // network call the user's chosen provider did not ask for. Opt in with
+    // `[cli] auto_update = true` once a real release channel exists.
+    let auto_update = current_config.cli.auto_update.unwrap_or(false);
 
     if current_config.cli.auto_update.is_none()
         && let Err(e) = config::update_config(|st| {

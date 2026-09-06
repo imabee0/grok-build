@@ -17,8 +17,7 @@ pub const GH_RELEASE_REPO: &str = "bcode-org-shared/bcode";
 pub(crate) const CLI_BASE_URL_PRIMARY: &str = "https://bcode.invalid/cli";
 
 /// Fallback CLI base URL: direct GCS, used when the primary is unreachable (Cloudflare outage, regional CF egress issue, DNS hijack, etc.).
-pub(crate) const CLI_BASE_URL_FALLBACK: &str =
-    "https://storage.googleapis.com/bcode-public-artifacts/cli";
+pub(crate) const CLI_BASE_URL_FALLBACK: &str = "https://artifacts.invalid/cli";
 
 /// CLI base URLs in preference order.
 /// Callers (channel-pointer fetch, binary download, in-app updater) try each in turn and stop at the first success.

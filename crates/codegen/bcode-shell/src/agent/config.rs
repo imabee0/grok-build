@@ -1754,7 +1754,7 @@ impl Default for Config {
             subagent_toggle: std::collections::HashMap::new(),
             subagent_roles: std::collections::HashMap::new(),
             subagent_personas: std::collections::HashMap::new(),
-            disable_web_search: false,
+            disable_web_search: true,
             todo_gate: false,
             laziness_debug_log: None,
             respect_gitignore: false,
@@ -2573,7 +2573,8 @@ impl Config {
             .default(self.is_feature_enabled(Feature::TurnSummary))
             .resolve()
     }
-    /// `image_gen` (and `/imagine`). Default on.
+    /// `image_gen` (and `/imagine`). Default OFF: image generation is not a coding
+    /// tool, and its definition costs context on every request. `BCODE_IMAGE_GEN=1` re-enables.
     ///
     /// `imagine_tools_disabled` is a remote force-off (env/config cannot re-enable).
     /// Otherwise: requirement > env > `[features]` > remote > default.
@@ -2596,11 +2597,11 @@ impl Config {
                     .as_ref()
                     .and_then(|s| s.image_gen_enabled),
             )
-            .default(true)
+            .default(false)
             .resolve()
     }
     /// `image_edit` tool gate.
-    /// Same denylist / requirement pattern as [`Self::resolve_image_gen`]; no `[features]` key (defaults on).
+    /// Same denylist / requirement pattern as [`Self::resolve_image_gen`]; no `[features]` key (defaults OFF).
     pub(crate) fn resolve_image_edit(&self) -> Resolved<bool> {
         use bcode_tools::implementations::bcode::IMAGE_EDIT_TOOL_NAME;
         if let Some(pinned) = self.requirements.image_edit.pinned() {
@@ -2613,9 +2614,10 @@ impl Config {
         {
             return Resolved::new(false, ConfigSource::Remote);
         }
-        BoolFlag::env("BCODE_IMAGE_EDIT").default(true).resolve()
+        BoolFlag::env("BCODE_IMAGE_EDIT").default(false).resolve()
     }
-    /// `image_to_video` / `reference_to_video` (and `/imagine-video`). Default on.
+    /// `image_to_video` / `reference_to_video` (and `/imagine-video`). Default OFF,
+    /// for the same reason as [`Self::resolve_image_gen`]. `BCODE_VIDEO_GEN=1` re-enables.
     ///
     /// Registered as a pair; denylisting either tool name (or `video_gen`) disables both.
     /// Otherwise same precedence as [`Self::resolve_image_gen`].
@@ -2640,7 +2642,7 @@ impl Config {
                     .as_ref()
                     .and_then(|s| s.video_gen_enabled),
             )
-            .default(true)
+            .default(false)
             .resolve()
     }
     /// Precedence: env `BCODE_IMAGE_GEN_MODEL_OVERRIDE` > `[features] image_gen_model_override` config > remote settings `image_gen_model_override`.
