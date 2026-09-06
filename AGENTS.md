@@ -7,7 +7,10 @@ provider-neutral. Every model provider is a peer; none is privileged.
 ## Verified commands
 
 ```sh
-make verify                      # ship gate: brand + fmt + check. Run before every push.
+make verify                      # ship gate: brand + fmt + check + test. Run before every push.
+make test                        # tests for the crates the fork touches
+make coexist                     # other CLIs' state is byte-identical after a session
+make egress                      # no network call with no provider selected
 make brand                       # zero-branding guarantee on its own
 make build                       # release binary
 make sync                        # pull a new upstream snapshot, rebuild main

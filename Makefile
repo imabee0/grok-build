@@ -1,8 +1,14 @@
 # bcode - see AGENTS.md
-.PHONY: help verify brand build check rebrand sync fmt clean-backup
+.PHONY: help verify brand build check test egress coexist rebrand sync fmt clean-backup
 
 PKG := bcode-pager-bin
 BIN := bcode
+
+# The crates this fork's feature stack touches. `make test` covers these; the
+# whole workspace is 94 crates and takes far longer than a ship gate should.
+TOUCHED := bcode-pricing bcode-models bcode-status-line bcode-chat-state \
+           bcode-sampling-types bcode-sampler bcode-pager bcode-workspace \
+           bcode-shell bcode-tools bcode-file-utils bcode-agent
 
 help:
 	@grep -hE '^[a-z-]+:.*##' $(MAKEFILE_LIST) | sed 's/:.*##/\t/' | column -t -s "$$(printf '\t')"
@@ -19,7 +25,13 @@ check: ## Type-check the composition root
 coexist: ## Assert other agent CLIs' state is untouched
 	@cargo build -q -p $(PKG) && tools/verify-coexistence.sh
 
-verify: brand fmt check ## The ship gate: run this locally before any push
+test: ## Tests for the crates this fork changes
+	@cargo test $(addprefix -p ,$(TOUCHED))
+
+egress: ## Assert a session with no provider selected reaches no network
+	@cargo build -q -p $(PKG) && tools/verify-no-egress.sh target/debug/$(BIN)
+
+verify: brand fmt check test ## The ship gate: run this locally before any push
 	@echo "verify: ok"
 
 build: ## Release binary
