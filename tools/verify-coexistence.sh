@@ -37,7 +37,12 @@ echo "# cursor rule"                     > "$WORK/.cursor/rules/r.md"
 echo "# project"                         > "$WORK/AGENTS.md"
 git -C "$WORK" init -q 2>/dev/null || true
 
-manifest() { find "$1" -type f -exec sha256sum {} + 2>/dev/null | sed "s|$1||" | sort; }
+# bcode's own home is the one thing it may create and write, so it is excluded
+# from the comparison; everything else under HOME must come back byte-identical.
+manifest() {
+  find "$1" -type f -not -path "$1/.bcode/*" -exec sha256sum {} + 2>/dev/null \
+    | sed "s|$1||" | sort
+}
 
 before=$(manifest "$HOMEDIR")
 before_work=$(manifest "$WORK")
@@ -65,8 +70,6 @@ if [ "$before_work" != "$after_work" ]; then
 fi
 
 # bcode may create its own home and nothing else.
-created=$(find "$HOMEDIR" -mindepth 1 -maxdepth 1 -newer "$HOMEDIR/.grok" 2>/dev/null \
-          | grep -v '/\.bcode$' || true)
 stray=$(find "$HOMEDIR" -mindepth 1 -maxdepth 1 -type d \
         ! -name '.grok' ! -name '.claude' ! -name '.cursor' ! -name '.codex' \
         ! -name '.bcode' || true)
