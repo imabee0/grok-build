@@ -54,7 +54,7 @@ async fn tool_bridge_routes_writes_through_injected_fs() {
         subagent: None,
         parent_scheduler_handle: None,
         skills: vec![],
-        state_path: std::env::temp_dir().join("bcode-test-fs/tool_state.json"),
+        state_path: super::support::unique_tool_state_path("fs"),
         memory_backend: None,
         web_search_config: Default::default(),
         web_fetch_config: Default::default(),

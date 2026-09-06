@@ -398,7 +398,17 @@ pub(crate) fn test_rebuild_spec_default() -> Arc<AgentRebuildSpec> {
         ),
         fs_backend: Arc::new(bcode_tools::computer::local::LocalFs),
         tools_notification_handle: ToolNotificationHandle::noop(),
-        bridge_state_path: std::env::temp_dir().join("test_tool_state.json"),
+        // Private to this test: the registry loads and saves
+        // `resources_state.json` beside this path, so a shared temp location
+        // would let one run inherit another's tool state.
+        bridge_state_path: {
+            let dir = std::env::temp_dir().join(format!(
+                "bcode-test-rebuild-{}",
+                std::process::id()
+            ));
+            std::fs::create_dir_all(&dir).expect("test state dir");
+            dir.join("tool_state.json")
+        },
         session_env: Arc::new(HashMap::new()),
         models_manager: crate::agent::models::ModelsManager::default(),
         compaction_policy: CompactionPolicy::default(),

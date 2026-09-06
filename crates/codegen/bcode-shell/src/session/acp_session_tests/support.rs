@@ -1,5 +1,23 @@
 #![allow(dead_code)]
 use super::*;
+/// A private state directory for one test.
+///
+/// The registry derives its `resources_state.json` from this path's *parent*
+/// and both loads and saves it, so a fixture that names a shared location —
+/// `/tmp/tool_state.json` did — makes every test read whatever a previous run
+/// (or another tool on the machine) happened to leave in `/tmp`. Each call
+/// gets its own directory instead, so state never crosses a test boundary.
+pub(crate) fn unique_tool_state_path(tag: &str) -> std::path::PathBuf {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let dir = std::env::temp_dir().join(format!(
+        "bcode-test-{tag}-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    std::fs::create_dir_all(&dir).expect("test state dir");
+    dir.join("tool_state.json")
+}
 pub(crate) fn completion_identity(actor: &SessionActor) -> std::rc::Rc<()> {
     actor
         .state
@@ -127,7 +145,7 @@ async fn test_agent_from_config(
         subagent: None,
         parent_scheduler_handle: None,
         skills: vec![],
-        state_path: std::path::PathBuf::from("/tmp/tool_state.json"),
+        state_path: unique_tool_state_path("agent"),
         memory_backend: None,
         web_search_config: Default::default(),
         web_fetch_config: Default::default(),

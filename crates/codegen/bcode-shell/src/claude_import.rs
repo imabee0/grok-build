@@ -1555,6 +1555,10 @@ mod tests {
     fn gate_load_claude_env_returns_empty_when_marker_set() {
         let _g = MarkerGuard;
         refresh_marker_cache(true);
+        // The reader lives in bcode-workspace and cannot see the shell-side
+        // cache, so it needs the env-var override too. Without it this test
+        // reads the developer's real `~/.claude/settings.json`.
+        unsafe { std::env::set_var("_BCODE_CLAUDE_MARKER_OVERRIDE", "1") };
         let dir = tempfile::tempdir().unwrap();
         let env = bcode_workspace::permission::claude_settings::load_claude_env_with_project(
             dir.path(),

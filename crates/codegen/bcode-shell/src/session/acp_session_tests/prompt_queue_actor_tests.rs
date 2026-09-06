@@ -1689,6 +1689,9 @@ async fn promote_queued_as_interjections_stops_at_send_now() {
 
 /// A follow-up queued behind an auto-wake must stay queued; Steer must not inject it into the wake.
 #[tokio::test]
+// The Steer flag these set is a process-global atomic, so these cases must not
+// interleave with each other.
+#[serial_test::serial(follow_up_steer)]
 async fn promote_queued_as_interjections_skips_auto_wake() {
     let local = tokio::task::LocalSet::new();
     local
@@ -1724,6 +1727,9 @@ async fn promote_queued_as_interjections_skips_auto_wake() {
 
 /// Product gate: with Steer off, a held plain row must not promote at a safe point (queue stays; no interjection in conversation).
 #[tokio::test]
+// The Steer flag these set is a process-global atomic, so these cases must not
+// interleave with each other.
+#[serial_test::serial(follow_up_steer)]
 async fn drain_at_safe_point_with_steer_off_does_not_promote_held_row() {
     let local = tokio::task::LocalSet::new();
     local
@@ -1756,6 +1762,9 @@ async fn drain_at_safe_point_with_steer_off_does_not_promote_held_row() {
 
 /// Product gate: with Steer on, a held plain row promotes and drains into a synthetic interjection user item.
 #[tokio::test]
+// The Steer flag these set is a process-global atomic, so these cases must not
+// interleave with each other.
+#[serial_test::serial(follow_up_steer)]
 async fn drain_at_safe_point_with_steer_on_promotes_and_drains_held_row() {
     let local = tokio::task::LocalSet::new();
     local
@@ -1990,6 +1999,9 @@ async fn promote_queued_as_interjections_stops_when_protected_is_next() {
 
 /// Steer-on safe-point drain must not treat a protected pin as promotable held work (pair with direct promote tests above).
 #[tokio::test]
+// The Steer flag these set is a process-global atomic, so these cases must not
+// interleave with each other.
+#[serial_test::serial(follow_up_steer)]
 async fn drain_at_safe_point_with_steer_on_leaves_protected_row_queued() {
     let local = tokio::task::LocalSet::new();
     local
