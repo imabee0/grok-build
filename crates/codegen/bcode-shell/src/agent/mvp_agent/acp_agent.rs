@@ -665,6 +665,23 @@ impl acp::Agent for MvpAgent {
                 });
                 Ok(Default::default())
             }
+            auth_method::PROVIDER_KEY_METHOD_ID => {
+                // Non-interactive: a credential already resolves for at least
+                // one catalog model (provider-wide, named account, or an
+                // auth-provider's minted token). Nothing to mint or persist
+                // here -- `resolve_credentials` looks it up fresh per turn.
+                self.set_auth_method(arguments.method_id.clone());
+                self.ensure_telemetry_client();
+                if crate::agent::chat_modes::process_chat_mode_enabled() {
+                    self.chat_modes.warm_in_background();
+                }
+                emit_login_span(true, "provider_key", None, None);
+                log_event(bcode_telemetry::events::Login {
+                    auth_method: "provider_key".to_string(),
+                    user_id: None,
+                });
+                Ok(Default::default())
+            }
             auth_method::CACHED_TOKEN_AUTH_METHOD_ID => {
                 let auth_meta = AuthRequestMeta::from_json(arguments.meta.as_ref());
                 if auth_meta.force_interactive {

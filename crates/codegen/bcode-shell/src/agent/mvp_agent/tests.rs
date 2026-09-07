@@ -2893,6 +2893,31 @@ async fn auth_type_bcode_api_key_no_current_returns_api_key() {
              behavior to fall back to."
     );
 }
+/// Regression: the pager calls `authenticate()` eagerly whenever `needs_login`
+/// is false (`eager_auth_or_login_fallback`), which is exactly the case
+/// `provider.key` advertises. Before this arm existed, `authenticate()` fell
+/// through its `_` wildcard to `invalid_params("unsupported auth method")`,
+/// the pager's fallback treated that as "no non-interactive credential", and
+/// a user with a perfectly good `bcode login <provider>` credential was sent
+/// back to the login screen anyway -- the exact bug this whole auth-method
+/// split exists to fix.
+#[tokio::test(flavor = "current_thread")]
+async fn authenticate_provider_key_succeeds_with_no_side_effects() {
+    use acp::Agent as _;
+    let agent = build_minimal_agent_for_tests();
+    let resp = agent
+        .authenticate(acp::AuthenticateRequest::new(acp::AuthMethodId::new(
+            crate::agent::auth_method::PROVIDER_KEY_METHOD_ID,
+        )))
+        .await
+        .expect("provider.key must be a recognized, successful auth method");
+    let _ = resp;
+    assert_eq!(
+        agent.auth_type(),
+        bcode_chat_state::AuthType::ApiKey,
+        "provider.key is not session-based -- nothing to refresh"
+    );
+}
 /// Positive baseline: when both signals agree (session-based method AND a live in-memory token), `SessionToken` is returned.
 /// This is the common case during a healthy session.
 #[tokio::test(flavor = "current_thread")]
