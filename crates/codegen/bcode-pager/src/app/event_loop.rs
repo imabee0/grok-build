@@ -399,6 +399,19 @@ fn seed_trust_state(app: &mut AppView, remote: Option<&bcode_shell::util::config
     };
 }
 
+/// The welcome-screen message shown in place of an auto-opened browser when the
+/// only advertised login is the built-in bcode.invalid backend with nothing
+/// real behind it (no enterprise OIDC, no external auth-provider command).
+/// bcode has no backend of its own to sign into -- the catalog's providers do.
+pub(crate) fn provider_sign_in_hint() -> String {
+    let mut hint = String::from("Sign in to a provider:\n");
+    for p in bcode_models::providers() {
+        hint.push_str(&format!("  {}\n", p.name));
+    }
+    hint.push_str("\nRun `bcode login` in a terminal to sign in.");
+    hint
+}
+
 /// Must run before the first render, or the startup-intent block opens a session behind the gate and the first frame shows the normal welcome.
 pub(crate) fn seed_consent_state_from_gate(
     app: &mut AppView,
@@ -1344,6 +1357,21 @@ pub(crate) async fn run(
                 error: Some(
                     bcode_shell::agent::auth_method::PREFERRED_API_KEY_UNAVAILABLE.to_string(),
                 ),
+            };
+            vec![]
+        } else if app.login_method_id.as_ref().is_some_and(|id| {
+            bcode_shell::agent::auth_method::AuthMethodKind::from_id(id)
+                == bcode_shell::agent::auth_method::AuthMethodKind::BcodeCom
+        }) && !crate::slash::commands::usage::detect_external_auth_provider(
+            &connection.auth_methods,
+        ) {
+            // The only advertised interactive method is the built-in bcode.invalid
+            // backend, with no enterprise OIDC and no external auth-provider
+            // command configured -- nothing real to sign in to. Auto-opening a
+            // browser here would open a tab at a host that cannot resolve.
+            // Show the provider list instead of hanging on "waiting for login".
+            app.auth_state = super::app_view::AuthState::Pending {
+                error: Some(provider_sign_in_hint()),
             };
             vec![]
         } else {

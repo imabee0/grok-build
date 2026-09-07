@@ -152,8 +152,12 @@ fn test_app() -> AppView {
         resume_local_miss: None,
         agent_override: None,
         bootstrap_acp_commands: Vec::new(),
+        // `oidc`, not the dead `bcode.invalid` default: these fixtures exercise
+        // login/cancel/abort mechanics, not which provider backs the method, and the real
+        // `bcode.invalid` default is gated (`dispatch_login`) to the provider-sign-in hint
+        // when nothing real is behind it -- tests for that gate set the method explicitly.
         auth_methods: vec![acp::AuthMethod::Agent(acp::AuthMethodAgent::new(
-            acp::AuthMethodId::new("bcode.invalid"),
+            acp::AuthMethodId::new(bcode_shell::agent::auth_method::OIDC_METHOD_ID),
             "Bcode".to_string(),
         ))],
         auth_state: AuthState::Done,
