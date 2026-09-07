@@ -1833,7 +1833,11 @@ fn is_non_serde_config_path(path: &str) -> bool {
 ///
 /// A malformed entry is skipped with a warning rather than failing the whole
 /// config: a typo in one account must not take the others down with it.
-fn parse_accounts(
+///
+/// `pub(crate)`: also called directly by [`crate::auth::provider_setup`]'s
+/// `account_status_from_effective_config`, the TUI provider manager's read
+/// path -- it has no `Config` to thread through, only the raw effective TOML.
+pub(crate) fn parse_accounts(
     raw_config: &toml::Value,
 ) -> (
     IndexMap<String, crate::auth::AccountConfig>,

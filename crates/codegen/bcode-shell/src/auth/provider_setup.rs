@@ -182,6 +182,19 @@ pub fn store_account_credential(
     accounts::store_account_key(home, name, key).map_err(|e| ProviderSetupError::Io(e.to_string()))
 }
 
+/// [`account_status`], reading the `[accounts.*]` table straight from the
+/// effective config on disk. The TUI provider manager's entry point: it has
+/// no live `Config` to thread through the way `MvpAgent` does, only `home`.
+/// Malformed entries are warned about by [`crate::agent::config`]'s own
+/// loader when the shell parses the same file; this call discards its
+/// warnings rather than surfacing them twice.
+pub fn account_status_from_effective_config(home: &Path) -> Vec<AccountStatus> {
+    let raw = crate::config::load_effective_config()
+        .unwrap_or_else(|_| toml::Value::Table(Default::default()));
+    let (accounts, _warnings) = crate::agent::config::parse_accounts(&raw);
+    account_status(home, &accounts)
+}
+
 /// Remove provider `id`'s stored credential. `Ok(false)` when there was none.
 pub fn remove_provider_credential(home: &Path, id: &str) -> Result<bool, ProviderSetupError> {
     accounts::remove_provider_key(home, id).map_err(|e| ProviderSetupError::Io(e.to_string()))
@@ -299,6 +312,22 @@ mod tests {
         assert_eq!(
             store_account_credential(dir.path(), "ok-name", "   "),
             Err(ProviderSetupError::EmptyKey)
+        );
+    }
+
+    /// Smoke test only: `load_effective_config()` reads whatever config layers
+    /// exist in the process environment, which a hermetic unit test cannot
+    /// fully control (see `bcode_home()`'s process-wide `OnceLock`, noted
+    /// elsewhere in this crate). This just pins that a stored key is visible
+    /// through the effective-config read path, not zero-in on its exact set.
+    #[test]
+    fn account_status_from_effective_config_sees_a_stored_key() {
+        let dir = home();
+        store_account_credential(dir.path(), "smoke-test-account", "key").unwrap();
+        let statuses = account_status_from_effective_config(dir.path());
+        assert!(
+            statuses.iter().any(|s| s.name == "smoke-test-account"),
+            "a stored account with no [accounts.*] table entry must still show up",
         );
     }
 

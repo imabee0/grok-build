@@ -1446,12 +1446,13 @@ fn render_welcome_authenticating(
             ])
             .flex(Flex::Center)
             .areas(prompt_area);
-            render_auth_input_box(
+            crate::views::masked_input::render_masked_input_box(
                 prompt_centered,
                 buf,
                 theme,
                 auth_code_input,
                 auth_code_cursor_byte,
+                "Paste your token here...",
             );
 
             // Hints
@@ -2536,53 +2537,6 @@ pub(crate) fn render_session_picker(
     )
 }
 
-/// Render the auth token input box (loopback mode).
-fn render_auth_input_box(
-    area: Rect,
-    buf: &mut Buffer,
-    theme: &Theme,
-    input: &str,
-    cursor_byte: usize,
-) {
-    let prompt_block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(theme.accent_user))
-        .padding(Padding {
-            left: 2,
-            right: 1,
-            top: 0,
-            bottom: 0,
-        });
-    let inner = prompt_block.inner(area);
-    prompt_block.render(area, buf);
-
-    if inner.height > 0 && inner.width > 2 {
-        let prompt = crate::glyphs::prompt_arrow();
-        let prompt_width = prompt.width() as u16;
-        let input_width = inner.width.saturating_sub(prompt_width);
-        let (display, cursor_column) =
-            masked_auth_token_view(input, cursor_byte, input_width as usize);
-
-        let style = if input.is_empty() {
-            Style::default().fg(theme.gray_dim)
-        } else {
-            Style::default().fg(theme.accent_user)
-        };
-
-        let line = Line::from(vec![
-            Span::styled(prompt, Style::default().fg(theme.accent_user)),
-            Span::styled(display, style),
-        ]);
-        buf.set_line(inner.x, inner.y, &line, inner.width);
-        if input_width > 0 {
-            let cursor_x = inner.x + prompt_width + cursor_column as u16;
-            if let Some(cell) = buf.cell_mut((cursor_x, inner.y)) {
-                cell.set_style(Style::default().fg(theme.bg_base).bg(theme.text_primary));
-            }
-        }
-    }
-}
-
 /// Render one startup warning centered in the given area.
 ///
 /// `startup_warnings` can hold more than one entry; the WezTerm kitty-keyboard banner is prepended ahead of `summarize_warnings()` output.
@@ -2623,50 +2577,6 @@ fn render_startup_warnings(
 
     Paragraph::new(lines).render(area, buf);
     None
-}
-
-fn auth_token_grapheme_visible(index: usize, total: usize) -> bool {
-    total <= 8 || index + 4 >= total
-}
-
-struct MaskedAuthToken {
-    display: String,
-    cursor_byte: usize,
-}
-
-fn build_masked_auth_token(input: &str, cursor_byte: usize) -> MaskedAuthToken {
-    let graphemes: Vec<(usize, &str)> = input.grapheme_indices(true).collect();
-    let total = graphemes.len();
-    let mut display = String::new();
-    let mut mapped_cursor = None;
-    for (index, (byte, grapheme)) in graphemes.into_iter().enumerate() {
-        if byte == cursor_byte {
-            mapped_cursor = Some(display.len());
-        }
-        if auth_token_grapheme_visible(index, total) {
-            display.push_str(grapheme);
-        } else {
-            display.push('\u{2022}');
-        }
-    }
-    MaskedAuthToken {
-        cursor_byte: mapped_cursor.unwrap_or(display.len()),
-        display,
-    }
-}
-
-fn masked_auth_token_view(input: &str, cursor_byte: usize, width: usize) -> (String, usize) {
-    if input.is_empty() {
-        return ("Paste your token here...".to_string(), 0);
-    }
-    let masked = build_masked_auth_token(input, cursor_byte);
-    let buffer =
-        bcode_ratatui_textarea::EditBuffer::from_parts(masked.display.as_str(), masked.cursor_byte);
-    let viewport = buffer.single_line_viewport(width);
-    (
-        masked.display[viewport.visible_byte_range].to_owned(),
-        viewport.cursor_display_column,
-    )
 }
 
 #[cfg(test)]
@@ -2785,78 +2695,6 @@ mod tests {
                 .collect::<String>();
             assert_eq!(feedback, expected);
         }
-    }
-
-    #[test]
-    fn masked_auth_token_preserves_reveal_policy() {
-        assert_eq!(
-            masked_auth_token_view("", 0, 24),
-            ("Paste your token here...".to_string(), 0)
-        );
-        assert_eq!(build_masked_auth_token("12345678", 8).display, "12345678");
-        assert_eq!(build_masked_auth_token("123456789", 9).display, "•••••6789");
-
-        let input = "abcdefghMIDDLEwxyz";
-        let masked = build_masked_auth_token(input, input.len()).display;
-        assert!(masked.starts_with("••••"));
-        assert!(masked.ends_with("wxyz"));
-        assert!(!masked.contains("MIDDLE"));
-        assert!(masked.contains("\u{2022}"));
-
-        let input = "测试令牌一二三四五六七八九十";
-        let masked = build_masked_auth_token(input, input.len()).display;
-        assert!(masked.starts_with("••••"));
-        assert!(masked.contains("\u{2022}"));
-    }
-
-    #[test]
-    fn masked_auth_mapping_handles_zero_width_combining_and_zwj_middle() {
-        let prefix = "abcdefgh";
-        let hidden = "\u{200b}e\u{301}👩🏽\u{200d}💻MID";
-        let suffix = "wxyz";
-        let token = format!("{prefix}{hidden}{suffix}");
-        let before = prefix.len();
-        let inside = prefix.len() + "\u{200b}e\u{301}".len();
-        let after = prefix.len() + hidden.len();
-        let expected = format!("{}{}", "\u{2022}".repeat(14), suffix);
-
-        let before_masked = build_masked_auth_token(&token, before);
-        let inside_masked = build_masked_auth_token(&token, inside);
-        let after_masked = build_masked_auth_token(&token, after);
-        assert_eq!(before_masked.display, expected);
-        assert_eq!(inside_masked.display, expected);
-        assert_eq!(after_masked.display, expected);
-        assert_eq!(before_masked.cursor_byte, "\u{2022}".len() * 8);
-        assert_eq!(inside_masked.cursor_byte, "\u{2022}".len() * 10);
-        assert_eq!(after_masked.cursor_byte, "\u{2022}".len() * 14);
-
-        for width in [1, 2, 5] {
-            for cursor in [before, inside, after] {
-                let (view, cursor_column) = masked_auth_token_view(&token, cursor, width);
-                assert!(view.width() <= width);
-                assert!(cursor_column < width);
-                assert!(!view.contains('\u{200b}'));
-                assert!(!view.contains("e\u{301}"));
-                assert!(!view.contains("👩🏽\u{200d}💻"));
-                assert!(!view.contains("MID"));
-            }
-        }
-
-        let wide_prefix = "中bcdefgh";
-        let wide_token = format!("{wide_prefix}HIDDEN{suffix}");
-        let (_, cursor_column) = masked_auth_token_view(&wide_token, wide_prefix.len(), 40);
-        assert_eq!(cursor_column, wide_prefix.graphemes(true).count());
-    }
-
-    #[test]
-    fn masked_auth_render_keeps_narrow_caret_visible() {
-        let token = "abcdefghSECRET-MIDDLEwxyz";
-        let cursor = "abcdefghSECRET".len();
-        let area = Rect::new(0, 0, 9, 3);
-        let theme = Theme::current();
-        let mut buffer = Buffer::empty(area);
-        render_auth_input_box(area, &mut buffer, &theme, token, cursor);
-        assert!((0..area.width).any(|x| buffer[(x, 1)].bg == theme.text_primary));
     }
 
     fn make_entry(id: &str, summary: &str, repo_name: &str) -> SessionPickerEntry {

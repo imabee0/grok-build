@@ -19,6 +19,7 @@ pub mod history_search;
 pub mod import_claude_modal;
 pub mod jump;
 pub mod list_pane;
+pub mod masked_input;
 pub mod mcps_modal;
 pub mod memory_modal;
 pub mod modal;
