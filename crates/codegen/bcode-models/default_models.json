@@ -24,7 +24,41 @@
     "exceed the window we clamp to (DeepSeek allows 384K output against a 1M",
     "window; we cap context at 500k), and sending a cap that large risks",
     "input + max_output exceeding the window. Absent, the provider applies its",
-    "own limit, which is what upstream did for its models too."
+    "own limit, which is what upstream did for its models too.",
+    "",
+    "",
+    "providers is the registry `bcode login` and the provider-scoped credential",
+    "tier (auth::accounts::provider_credential) read: one entry per provider,",
+    "keyed by id. A model row's provider is its model_family; there is no",
+    "separate per-model provider field. A credential stored under this id",
+    "(`bcode login`, scope `provider::<id>` in auth.json) works for every model",
+    "that shares the model_family, with no config.toml edit."
+  ],
+  "providers": [
+    {
+      "id": "deepseek",
+      "name": "DeepSeek",
+      "base_url": "https://api.deepseek.com/v1",
+      "env_key": "DEEPSEEK_API_KEY",
+      "default_model": "deepseek-v4-pro",
+      "api_key_url": "https://platform.deepseek.com/api_keys"
+    },
+    {
+      "id": "openai",
+      "name": "OpenAI",
+      "base_url": "https://api.openai.com/v1",
+      "env_key": "OPENAI_API_KEY",
+      "default_model": "gpt-5.6-terra",
+      "api_key_url": "https://platform.openai.com/api-keys"
+    },
+    {
+      "id": "xai",
+      "name": "xAI",
+      "base_url": "https://api.x.ai/v1",
+      "env_key": "XAI_API_KEY",
+      "default_model": "grok-4.6",
+      "api_key_url": "https://console.x.ai"
+    }
   ],
   "default": "deepseek-v4-pro",
   "web_search": "deepseek-v4-flash",

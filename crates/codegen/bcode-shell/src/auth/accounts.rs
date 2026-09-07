@@ -25,6 +25,13 @@
 //! corrupt-recovery reader, the owner-only permissions and the cross-process
 //! lock; a second store would have to grow all four again, and a second set of
 //! bugs with them.
+//!
+//! A second, coarser scope lives here too: `provider::<id>`, one credential per
+//! *provider* rather than per named account. `bcode login` writes here. It is
+//! the zero-config path — a key stored for `deepseek` works for every DeepSeek
+//! model with nothing in `config.toml` — and it sits below a named account in
+//! the credential precedence (`resolve_credentials`), so `bcode account add`
+//! remains how a second or third credential on the same provider is reached.
 
 use std::path::Path;
 
@@ -38,6 +45,11 @@ use super::storage::{read_auth_json, read_auth_json_or_empty_recovering_corrupt,
 /// Distinct from `bcode::` so an account can never collide with the session
 /// scopes, whatever the user names it.
 pub const ACCOUNT_SCOPE_PREFIX: &str = "account::";
+
+/// Scope prefix for a provider-wide credential in `auth.json` (`bcode login`).
+/// Distinct from [`ACCOUNT_SCOPE_PREFIX`] so a provider id and an account name
+/// can never collide even if a user names an account after a provider.
+pub const PROVIDER_SCOPE_PREFIX: &str = "provider::";
 
 /// Longest account name accepted. Long enough for a descriptive name, short
 /// enough that a scope key stays readable in `auth.json`.
@@ -161,9 +173,20 @@ pub fn is_valid_account_name(name: &str) -> bool {
         && !name.starts_with('.')
 }
 
+/// Whether `id` may be used as a provider id. Same allowlist as an account
+/// name, for the same reason: it becomes a key in `auth.json`.
+pub fn is_valid_provider_id(id: &str) -> bool {
+    is_valid_account_name(id)
+}
+
 /// The `auth.json` scope holding `name`'s credential.
 pub fn account_scope(name: &str) -> String {
     format!("{ACCOUNT_SCOPE_PREFIX}{name}")
+}
+
+/// The `auth.json` scope holding provider `id`'s credential.
+pub fn provider_scope(id: &str) -> String {
+    format!("{PROVIDER_SCOPE_PREFIX}{id}")
 }
 
 fn auth_json(bcode_home: &Path) -> std::path::PathBuf {
@@ -182,27 +205,86 @@ pub fn read_account_key(bcode_home: &Path, name: &str) -> Option<String> {
         .filter(|key| !key.trim().is_empty())
 }
 
+/// Read a stored provider key. `None` when the provider has none.
+pub fn read_provider_key(bcode_home: &Path, id: &str) -> Option<String> {
+    if !is_valid_provider_id(id) {
+        return None;
+    }
+    let store = read_auth_json(&auth_json(bcode_home)).ok()?;
+    store
+        .get(&provider_scope(id))
+        .map(|auth| auth.key.clone())
+        .filter(|key| !key.trim().is_empty())
+}
+
+/// The credential `resolve_credentials` uses for its provider tier: the key
+/// stored for `model_family` (a model's provider), if any.
+///
+/// `model_family` is `None` for a model the catalog or config didn't tag with
+/// a provider — such a model has no provider tier to consult, only its own
+/// key/account. Takes `bcode_home` explicitly, like [`AccountRef::credential`],
+/// so it is unit-testable without the process-global cache in
+/// `bcode_dirs::bcode_home()`.
+pub fn provider_credential(model_family: Option<&str>, bcode_home: &Path) -> Option<String> {
+    read_provider_key(bcode_home, model_family?)
+}
+
 /// Store `key` for `name`, replacing any previous credential.
 pub fn store_account_key(bcode_home: &Path, name: &str, key: &str) -> std::io::Result<()> {
-    if !is_valid_account_name(name) {
-        return Err(std::io::Error::new(
+    store_scoped_key(bcode_home, &account_scope(name), key).map_err(|_| {
+        std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
             format!(
                 "invalid account name {name:?}: letters, digits, '_', '-' and '.', \
                  up to {MAX_ACCOUNT_NAME} characters, not starting with '.'"
             ),
+        )
+    })
+}
+
+/// Store `key` for provider `id`, replacing any previous credential.
+/// This is what `bcode login` writes.
+pub fn store_provider_key(bcode_home: &Path, id: &str, key: &str) -> std::io::Result<()> {
+    store_scoped_key(bcode_home, &provider_scope(id), key).map_err(|_| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!(
+                "invalid provider id {id:?}: letters, digits, '_', '-' and '.', \
+                 up to {MAX_ACCOUNT_NAME} characters, not starting with '.'"
+            ),
+        )
+    })
+}
+
+/// Shared write path for both scopes: validate the scope's own name/id
+/// (embedded in `scope`, checked by the caller before formatting it) is
+/// unreachable here, so this validates the whole scope string is one of ours.
+fn store_scoped_key(bcode_home: &Path, scope: &str, key: &str) -> std::io::Result<()> {
+    let is_valid = scope
+        .strip_prefix(ACCOUNT_SCOPE_PREFIX)
+        .map(is_valid_account_name)
+        .or_else(|| {
+            scope
+                .strip_prefix(PROVIDER_SCOPE_PREFIX)
+                .map(is_valid_provider_id)
+        })
+        .unwrap_or(false);
+    if !is_valid {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "invalid scope",
         ));
     }
     if key.trim().is_empty() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
-            "refusing to store an empty account key",
+            "refusing to store an empty credential",
         ));
     }
     let path = auth_json(bcode_home);
     let mut store = read_auth_json_or_empty_recovering_corrupt(&path)?;
     store.insert(
-        account_scope(name),
+        scope.to_owned(),
         BcodeAuth {
             key: key.to_owned(),
             auth_mode: AuthMode::ApiKey,
@@ -214,11 +296,20 @@ pub fn store_account_key(bcode_home: &Path, name: &str, key: &str) -> std::io::R
 
 /// Remove `name`'s stored credential. `Ok(false)` when there was none.
 pub fn remove_account_key(bcode_home: &Path, name: &str) -> std::io::Result<bool> {
+    remove_scoped_key(bcode_home, &account_scope(name))
+}
+
+/// Remove provider `id`'s stored credential. `Ok(false)` when there was none.
+pub fn remove_provider_key(bcode_home: &Path, id: &str) -> std::io::Result<bool> {
+    remove_scoped_key(bcode_home, &provider_scope(id))
+}
+
+fn remove_scoped_key(bcode_home: &Path, scope: &str) -> std::io::Result<bool> {
     let path = auth_json(bcode_home);
     let Ok(mut store) = read_auth_json(&path) else {
         return Ok(false);
     };
-    if store.remove(&account_scope(name)).is_none() {
+    if store.remove(scope).is_none() {
         return Ok(false);
     }
     write_auth_json(&path, &store)?;
@@ -230,12 +321,21 @@ pub fn remove_account_key(bcode_home: &Path, name: &str) -> std::io::Result<bool
 /// An account that resolves only from `env_key` has nothing here, which is
 /// why `bcode account list` reads the config as well.
 pub fn stored_account_names(bcode_home: &Path) -> Vec<String> {
+    stored_scoped_names(bcode_home, ACCOUNT_SCOPE_PREFIX)
+}
+
+/// The ids of every provider with a stored credential, sorted.
+pub fn stored_provider_ids(bcode_home: &Path) -> Vec<String> {
+    stored_scoped_names(bcode_home, PROVIDER_SCOPE_PREFIX)
+}
+
+fn stored_scoped_names(bcode_home: &Path, prefix: &str) -> Vec<String> {
     let Ok(store) = read_auth_json(&auth_json(bcode_home)) else {
         return Vec::new();
     };
     let mut names: Vec<String> = store
         .keys()
-        .filter_map(|scope| scope.strip_prefix(ACCOUNT_SCOPE_PREFIX))
+        .filter_map(|scope| scope.strip_prefix(prefix))
         .map(str::to_owned)
         .collect();
     names.sort();
@@ -346,5 +446,96 @@ mod tests {
             None,
             "a reserved kind must not silently serve an API key"
         );
+    }
+
+    #[test]
+    fn a_provider_key_round_trips_and_removes_independently_of_accounts() {
+        let dir = home();
+        assert_eq!(provider_credential(Some("deepseek"), dir.path()), None);
+        store_provider_key(dir.path(), "deepseek", "sk-provider").expect("store");
+        assert_eq!(
+            provider_credential(Some("deepseek"), dir.path()).as_deref(),
+            Some("sk-provider")
+        );
+        assert_eq!(stored_provider_ids(dir.path()), vec!["deepseek".to_owned()]);
+
+        // An account of the same name occupies a distinct scope.
+        store_account_key(dir.path(), "deepseek", "sk-account").expect("store");
+        assert_eq!(
+            provider_credential(Some("deepseek"), dir.path()).as_deref(),
+            Some("sk-provider"),
+            "an account named the same as a provider must not shadow it"
+        );
+        assert_eq!(
+            read_account_key(dir.path(), "deepseek").as_deref(),
+            Some("sk-account")
+        );
+
+        assert!(remove_provider_key(dir.path(), "deepseek").expect("remove"));
+        assert_eq!(provider_credential(Some("deepseek"), dir.path()), None);
+        assert_eq!(
+            read_account_key(dir.path(), "deepseek").as_deref(),
+            Some("sk-account"),
+            "removing the provider credential must not touch the account"
+        );
+        assert!(!remove_provider_key(dir.path(), "deepseek").expect("remove"));
+    }
+
+    #[test]
+    fn a_model_with_no_provider_has_no_provider_tier_to_consult() {
+        let dir = home();
+        store_provider_key(dir.path(), "deepseek", "sk-provider").expect("store");
+        assert_eq!(provider_credential(None, dir.path()), None);
+    }
+
+    #[test]
+    fn an_empty_or_invalid_provider_id_is_refused_rather_than_written() {
+        let dir = home();
+        for (id, key) in [("deepseek", "  "), ("bad id", "sk"), ("", "sk")] {
+            let err = store_provider_key(dir.path(), id, key).expect_err("must refuse");
+            assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+        }
+        assert!(stored_provider_ids(dir.path()).is_empty());
+    }
+
+    /// The acceptance test for the whole tier: one key, stored once for
+    /// `deepseek`, resolves for every DeepSeek row in the real embedded
+    /// catalog -- and for none of the other providers' rows -- with no
+    /// `config.toml` involved at all.
+    #[test]
+    fn one_provider_key_resolves_for_every_model_that_shares_it() {
+        #[derive(serde::Deserialize)]
+        struct Row {
+            model_family: Option<String>,
+        }
+        #[derive(serde::Deserialize)]
+        struct Catalog {
+            models: Vec<Row>,
+        }
+        let catalog: Catalog =
+            serde_json::from_str(bcode_models::DEFAULT_MODELS_JSON).expect("catalog parses");
+        let families: std::collections::BTreeSet<String> = catalog
+            .models
+            .into_iter()
+            .filter_map(|m| m.model_family)
+            .collect();
+        assert!(
+            families.contains("deepseek") && families.len() > 1,
+            "fixture assumption: the catalog has DeepSeek and at least one other provider"
+        );
+
+        let dir = home();
+        store_provider_key(dir.path(), "deepseek", "sk-ds").expect("store");
+        for family in &families {
+            let resolved = provider_credential(Some(family), dir.path());
+            if family == "deepseek" {
+                assert_eq!(resolved.as_deref(), Some("sk-ds"));
+            } else {
+                assert_eq!(
+                    resolved, None,
+                    "a {family} model must not see DeepSeek's key"
+                );
+            }
+        }
     }
 }

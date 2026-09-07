@@ -23,11 +23,31 @@ struct DefaultModels {
     /// Falls back to `default` if not specified in JSON.
     session_summary: Option<String>,
     models: Vec<DefaultModelEntry>,
+    #[serde(default)]
+    providers: Vec<ProviderInfo>,
 }
 
 #[derive(serde::Deserialize)]
 struct DefaultModelEntry {
     model: String,
+    model_family: Option<String>,
+}
+
+/// One `providers` row: the registry `bcode login` and the provider-scoped
+/// credential tier read. A model's provider is its `model_family`; a
+/// credential stored for a provider id works for every model that shares it.
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub struct ProviderInfo {
+    pub id: String,
+    pub name: String,
+    pub base_url: String,
+    /// The provider's own conventional env var name for its API key.
+    pub env_key: String,
+    /// Catalog id of the model `bcode login` offers to set as the default
+    /// after a successful sign-in to this provider.
+    pub default_model: String,
+    /// Where a user without a key yet can go create one.
+    pub api_key_url: String,
 }
 
 static DEFAULTS: LazyLock<DefaultModels> = LazyLock::new(|| {
@@ -41,9 +61,41 @@ static DEFAULTS: LazyLock<DefaultModels> = LazyLock::new(|| {
         "default_models.json: 'default' is '{}' but 'models' array only has {model_ids:?}",
         defaults.default,
     );
+    let provider_ids: Vec<&str> = defaults.providers.iter().map(|p| p.id.as_str()).collect();
+    for model in &defaults.models {
+        if let Some(family) = model.model_family.as_deref() {
+            assert!(
+                provider_ids.contains(&family),
+                "default_models.json: model '{}' has model_family '{family}',                  which has no matching entry in 'providers' ({provider_ids:?})",
+                model.model,
+            );
+        }
+    }
+    for provider in &defaults.providers {
+        assert!(
+            model_ids.contains(&provider.default_model.as_str()),
+            "default_models.json: provider '{}' has default_model '{}',              which is not in 'models' ({model_ids:?})",
+            provider.id,
+            provider.default_model,
+        );
+    }
 
     defaults
 });
+
+/// The provider registry: one row per provider, in catalog order.
+///
+/// A model's provider is its `model_family`; look a model up by matching
+/// [`ModelInfo::model_family`](../bcode_shell/agent/config/struct.ModelInfo.html)
+/// (or the raw JSON field of the same name) against [`ProviderInfo::id`].
+pub fn providers() -> &'static [ProviderInfo] {
+    &DEFAULTS.providers
+}
+
+/// The provider registered under `id`, if any.
+pub fn provider(id: &str) -> Option<&'static ProviderInfo> {
+    DEFAULTS.providers.iter().find(|p| p.id == id)
+}
 
 /// Primary model for coding tasks and general fallback.
 pub fn default_model() -> &'static str {

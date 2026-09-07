@@ -4869,7 +4869,7 @@ pub(crate) fn first_own_credential(
         .map(str::to_owned)
         .or_else(|| env_key.and_then(EnvKeys::resolve_value))
 }
-/// Priority: model api_key/env_key > named account > cached auth-provider token > session token > BCODE_API_KEY.
+/// Priority: model api_key/env_key > named account > provider credential (`bcode login`) > cached auth-provider token > session token > BCODE_API_KEY.
 pub(crate) fn resolve_credentials(
     model: &ModelEntry,
     session_key: Option<&str>,
@@ -4886,6 +4886,18 @@ pub(crate) fn resolve_credentials(
         .as_ref()
         .and_then(|account| account.credential(&crate::util::bcode_home::bcode_home()))
     {
+        (
+            Some(key),
+            info.base_url.clone(),
+            bcode_chat_state::AuthType::ApiKey,
+        )
+    } else if let Some(key) = crate::auth::accounts::provider_credential(
+        info.model_family.as_deref(),
+        &crate::util::bcode_home::bcode_home(),
+    ) {
+        // `bcode login`'s zero-config tier: a key stored for the model's
+        // provider, one level below a named account so `bcode account add`
+        // still reaches a second credential on the same provider.
         (
             Some(key),
             info.base_url.clone(),
