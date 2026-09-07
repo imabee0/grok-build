@@ -16,6 +16,7 @@ pub(crate) mod manager;
 mod model;
 pub mod oidc;
 mod pre_tui;
+pub mod provider_setup;
 pub(crate) mod recovery;
 pub(crate) mod refresh;
 pub(crate) mod single_flight;
