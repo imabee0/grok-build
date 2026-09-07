@@ -109,8 +109,11 @@ Bcode resolves the API key in this order:
 
 1. The `api_key` field in the model config
 2. The environment variable(s) named by `env_key` — a single string or an array of names. The first set, non-empty value wins (for example `env_key = ["ANTHROPIC_AUTH_TOKEN", "LC_ANTHROPIC_AUTH_TOKEN"]` for SSH `LC_*` forwarding)
-3. Your signed-in session token (from `bcode login`), for a model with no `api_key`/`env_key` of its own
-4. The `BCODE_API_KEY` environment variable (global fallback; Bcode also accepts `BCODE_CODE_BCODE_API_KEY` for backward compatibility)
+3. A named [account](#accounts-several-credentials-at-once) the model points at with `account = "<name>"`
+4. The provider-wide credential `bcode login` stored for this model's provider — matched by `model_family`, so one key covers every model on that provider with no config edit
+5. An `auth_provider` command's cached token, if the model or its account names one
+6. Your signed-in enterprise-SSO session token (first-party endpoints only)
+7. The `BCODE_API_KEY` environment variable (global fallback; Bcode also accepts `BCODE_CODE_BCODE_API_KEY` for backward compatibility)
 
 ### Context Window
 
@@ -267,17 +270,21 @@ Credential precedence for a request, highest first:
 
 1. The model's own `api_key` / `env_key`
 2. The model's `account`
-3. The model's `auth_provider` command token
-4. The session bearer from `bcode login` (first-party endpoints only)
-5. `BCODE_API_KEY`
+3. The provider-wide credential `bcode login` stored for the model's provider
+4. The model's (or its account's) `auth_provider` command token
+5. The session bearer from enterprise SSO (first-party endpoints only)
+6. `BCODE_API_KEY`
 
 A model naming an account that does not exist resolves with **no** credential
-rather than falling through to the session bearer, and `bcode inspect` reports
-it: billing an identity you did not name is worse than failing.
+rather than falling through to a lower tier, and `bcode inspect` reports it:
+billing an identity you did not name is worse than failing.
 
-`kind` accepts `api-key` today. `oauth` -- subscription sign-in, with
-`provider = "<catalog provider>"` -- is reserved: it parses, so config written
-for it keeps working, but it resolves no credential yet and says so.
+`kind` accepts `api-key` and `command` today -- the latter mints through the
+same `[auth_provider.<name>]` contract as a model's own `auth_provider` field,
+named by the account's `auth_provider = "<name>"`. `oauth` (subscription
+sign-in) and `oidc` (your own IdP), each with `provider = "<catalog
+provider>"`, are reserved: they parse, so config written for them keeps
+working, but they resolve no credential yet and say so.
 
 ---
 

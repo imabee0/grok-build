@@ -41,6 +41,17 @@ User-level configuration lives in `$BCODE_HOME/config.toml` (default `~/.bcode/c
 | `agent.name` | `string` | `yes` | `user` | Built-in or discovered agent definition name. Also BCODE_AGENT and `--agent-profile`. |
 | `agent.system_prompt_label` | `string` | `yes` | `user` | Global system-prompt identity; per-model override wins. |
 
+### `accounts`
+
+| Key | Type / Values | Requirements | Managed | Details |
+| --- | --- | --- | --- | --- |
+| `accounts.<name>` | `table` | `yes` | `user` | One named credential; see [Accounts](11-custom-models.md#accounts-several-credentials-at-once). Point a model at it with `[model.<id>] account = "<name>"`. |
+| `accounts.<name>.kind` | `api-key / command / oauth / oidc` | `yes` | `user` | `oauth` and `oidc` parse but resolve no credential yet. Default `api-key`. |
+| `accounts.<name>.env_key` | `string / string[]` | `yes` | `user` | Environment variable(s) holding the key, checked before the stored one. |
+| `accounts.<name>.provider` | `string` | `yes` | `user` | Catalog provider id this account signs in to; meaningful for `oauth` / `oidc` only. |
+| `accounts.<name>.auth_provider` | `string` | `yes` | `user` | For `kind = "command"`: the `[auth_provider.<name>]` table this account mints its credential from. |
+| `accounts.<name>.description` | `string` | `yes` | `user` | Free-text label shown by `bcode account list`. |
+
 ### `announcements`
 
 | Key | Type / Values | Requirements | Managed | Details |

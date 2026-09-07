@@ -1,76 +1,129 @@
 # Authentication
 
-Bcode supports several authentication methods, including interactive browser login, enterprise single sign-on (SSO), and headless CI/CD runners.
+Bcode has no backend of its own to sign into. Your model provider does.
+Authentication means giving Bcode a credential for *that* provider -- an API
+key by default, or your own enterprise SSO if you run one.
 
 ---
 
-## Browser Login (Default)
-
-On first launch, Bcode opens your browser to authenticate with bcode.invalid:
-
-```bash
-bcode
-```
-
-Bcode stores credentials in `~/.bcode/auth.json` and reuses them across sessions. Bcode refreshes access tokens automatically in the background. When a token can't be refreshed, Bcode prompts you to sign in again. Credentials without a server-provided expiry fall back to a 30-day lifetime.
-
-### Credential storage
-
-Tokens in `~/.bcode/auth.json` (and MCP OAuth tokens in `~/.bcode/mcp_credentials.json`) are written with owner-only permissions (`0600` on Unix). Anyone with filesystem access to those paths can use the credentials, so:
-
-- Prefer full-disk encryption (FileVault, BitLocker, LUKS, or equivalent).
-- Do not copy `auth.json` or `mcp_credentials.json` into shared directories, tickets, or chat.
-- On multi-user hosts, keep `$HOME` / `$BCODE_HOME` private to your account.
-
-### Re-authenticate
-
-To switch accounts or resolve an authentication problem, run:
+## `bcode login` (the default path)
 
 ```bash
 bcode login
 ```
 
-Running `bcode login` starts the sign-in flow again, replacing your cached session. By default, it opens your browser and signs in through bcode OAuth at `auth.bcode.invalid`. Pass a flag to select a different flow:
+Lists the providers in the catalog, asks you to pick one, and reads its API
+key off stdin -- never as a command-line argument, so it never lands in shell
+history or `ps`:
 
-| Flag | Description |
-|------|-------------|
-| `--oauth` | Sign in through bcode OAuth at `auth.bcode.invalid`. This is the default, so the flag is optional. |
-| `--device-auth` (alias `--device-code`) | Sign in with the device-code flow for headless or remote environments. |
+```
+Sign in to a provider
 
-To sign out, run `bcode logout`. It takes no flags and clears your cached credentials.
+  1. DeepSeek   api.deepseek.com
+  2. OpenAI     api.openai.com
+  3. ...        (every provider in your build's catalog)
+
+Provider number or id: 1
+Paste your DeepSeek API key: ****************
+DeepSeek: key stored in ~/.bcode/auth.json -- every DeepSeek model now has a credential
+
+Make deepseek-v4-pro your default model? [Y/n]
+```
+
+The key is stored once, under that provider's own scope in `~/.bcode/auth.json`
+(owner-only, `0600`) -- not per model, so every model on that provider works
+immediately with nothing written to `config.toml`. Accepting the default-model
+offer writes `models.default` through the same writer `/model` uses; nothing
+else in `config.toml` is touched.
+
+Non-interactive:
+
+```bash
+bcode login deepseek --from-env DEEPSEEK_API_KEY   # read the key from the environment
+echo "sk-..." | bcode login deepseek               # read the key from stdin
+```
+
+`bcode login` with no provider and no terminal attached refuses rather than
+hangs -- pass a provider id explicitly in scripts.
+
+### A second key on the same provider
+
+`--account <name>` stores the key as a named account instead of the
+provider-wide credential, so a model can request it by name:
+
+```bash
+bcode login deepseek --account ds-alt
+```
+
+```toml
+[model.ds-alt]
+model = "deepseek-v4-pro"
+account = "ds-alt"
+```
+
+See [Custom Models](11-custom-models.md#accounts-several-credentials-at-once)
+for routing subagents to different accounts.
+
+### Sign out
+
+```bash
+bcode logout deepseek        # clear one provider's stored credential
+bcode logout --account ds-alt  # clear one named account
+bcode logout --all            # clear every provider, every account, and enterprise SSO
+```
 
 ---
 
-## API Key
+## API Key (no wizard)
 
-For CI/CD, automation, or environments without browser access, use an API key from [console.bcode.invalid](https://console.bcode.invalid):
+Exporting the provider's own environment variable works the same as
+`bcode login`, without touching `auth.json`:
 
 ```bash
-export BCODE_API_KEY="bcode-..."
+export DEEPSEEK_API_KEY="sk-..."
 bcode
 ```
 
-Bcode uses the API key as a fallback when no session token is active. If you have already signed in interactively, the stored session token takes precedence. To fall back to the API key, run `bcode logout` or delete `~/.bcode/auth.json`.
+Each model in the catalog names the variable its provider reads. A model's own
+`api_key` or `env_key` always wins over anything `bcode login` stored -- see
+[Auth Precedence](#auth-precedence).
+
+### Credential storage
+
+Tokens in `~/.bcode/auth.json` (and MCP OAuth tokens in
+`~/.bcode/mcp_credentials.json`) are written with owner-only permissions
+(`0600` on Unix). Anyone with filesystem access to those paths can use the
+credentials, so:
+
+- Prefer full-disk encryption (FileVault, BitLocker, LUKS, or equivalent).
+- Do not copy `auth.json` or `mcp_credentials.json` into shared directories, tickets, or chat.
+- On multi-user hosts, keep `$HOME` / `$BCODE_HOME` private to your account.
 
 ---
 
-## OIDC (Customer SSO)
+## Enterprise SSO
 
-Authenticate developers through your own Identity Provider (IdP) -- such as Okta, Azure AD, or Auth0 -- instead of bcode.invalid.
+For a team running its own identity provider or auth gateway in front of
+Bcode, rather than BYOK per developer. Two transports, both unrelated to
+`bcode login`'s provider wizard and off by default.
 
-### 1. Register a public client in your IdP
+### OIDC (Customer SSO)
+
+Authenticate developers through your own Identity Provider (IdP) -- such as Okta, Azure AD, or Auth0.
+
+#### 1. Register a public client in your IdP
 
 - Grant type: Authorization Code with PKCE (Proof Key for Code Exchange)
 - Redirect URI: `http://127.0.0.1/callback` -- a loopback address. Bcode binds a random port at sign-in time, and most IdPs treat the loopback redirect as port-agnostic per [RFC 8252](https://tools.ietf.org/html/rfc8252).
 - No client secret. PKCE replaces it.
 
-### 2. Configure the CLI
+#### 2. Configure the CLI
 
 Via config file:
 
 ```toml
 # ~/.bcode/config.toml
-[bcode_com_config.oidc]
+[auth.oidc]
 issuer = "https://acme.okta.com"
 client_id = "0oa1b2c3d4e5f6g7h8i9"
 ```
@@ -88,24 +141,37 @@ You can also override the API endpoint to point at your own proxy:
 export BCODE_CLI_CHAT_PROXY_BASE_URL="https://bcode-proxy.acme.com/v1"
 ```
 
-### 3. Run `bcode`
+#### 3. Run `bcode login --oauth` (or just `bcode`)
 
-The CLI discovers endpoints via `{issuer}/.well-known/openid-configuration`, opens the IdP login page, and stores tokens in `~/.bcode/auth.json`. Tokens auto-refresh silently via the stored `refresh_token`.
+Once `auth.oidc` is configured, the CLI discovers endpoints via
+`{issuer}/.well-known/openid-configuration`, opens the IdP login page, and
+stores tokens in `~/.bcode/auth.json`. Tokens auto-refresh silently via the
+stored `refresh_token`. Without a configured issuer, `--oauth` and
+`--device-auth` fall back to a built-in issuer this fork cannot reach --
+configure `auth.oidc` (or `auth.oauth2`) first.
 
-### Optional fields
+#### Optional fields
 
 | Field | Default | Notes |
 |-------|---------|-------|
 | `scopes` | `["openid", "profile", "email", "offline_access", "api:access"]` | `offline_access` enables silent token refresh |
 | `audience` | None | Required by some IdPs (e.g., Auth0) |
 
----
+#### Device Code Flow
 
-## External Auth Provider
+For headless environments (SSH sessions, Docker containers, remote VMs) where no browser is available locally:
 
-When browser-based login isn't possible -- for example, on sandboxed VMs, CI runners, or air-gapped networks -- delegate authentication to an external binary or script.
+```bash
+bcode login --device-auth    # or: bcode login --device-code
+```
 
-### How It Works
+This prints a URL and code to the terminal. Open the URL on any device, enter the code, and complete authentication. Bcode polls until the login is confirmed. Same issuer configuration as above applies.
+
+### External Auth Provider
+
+When browser-based login isn't possible -- for example, on sandboxed VMs, CI runners, or air-gapped networks -- delegate authentication to an external binary or script. The same contract backs a named account of `kind = "command"` (see [Custom Models](11-custom-models.md#where-an-account-sits)), so one binary can serve both a model's own `auth_provider` and an account's.
+
+#### How It Works
 
 ```
 +--------------+     sh -c     +------------------------+
@@ -123,7 +189,7 @@ When browser-based login isn't possible -- for example, on sandboxed VMs, CI run
 4. **stdout** is captured by Bcode and saved as the access token
 5. Exit 0 = success; exit non-zero = Bcode falls back to interactive login
 
-### The stdout / stderr Contract
+#### The stdout / stderr Contract
 
 | Stream | What to print | Who sees it |
 |--------|---------------|-------------|
@@ -132,7 +198,7 @@ When browser-based login isn't possible -- for example, on sandboxed VMs, CI run
 
 **Do not print anything to stdout except the token.** No progress messages, no debug output. Bcode reads stdout, trims surrounding whitespace, and parses the result as a token.
 
-### stdout Token Format
+#### stdout Token Format
 
 **Bare string** -- just the raw token:
 
@@ -157,7 +223,7 @@ JSON fields:
 | `expires_in` | no | Token lifetime in seconds; enables proactive refresh before expiry |
 | `issuer` | no | Identifies the token's issuer |
 
-### Configuration
+#### Configuration
 
 Via config file:
 
@@ -177,7 +243,21 @@ export BCODE_AUTH_PROVIDER_LABEL="Acme Corp"
 export BCODE_AUTH_TOKEN_TTL=3600
 ```
 
-### Token Refresh
+Or as a named account any model can point at:
+
+```toml
+[auth_provider.acme]
+command = "/usr/local/bin/my-auth-provider"
+
+[accounts.acme]
+kind = "command"
+auth_provider = "acme"
+
+[model.deepseek-v4-pro]
+account = "acme"
+```
+
+#### Token Refresh
 
 Bcode runs your binary on two different contracts, and `BCODE_AUTH_EXPIRED` is how
 it tells them apart. Each run fully replaces the stored credential, so emit the
@@ -188,10 +268,10 @@ same JSON fields (such as `issuer`) on every invocation, including refreshes.
   rejected. Nobody is watching. stdin is closed, your stderr is swallowed, and
   the binary is given a few seconds before it is killed. Mint silently or exit
   non-zero — never block.
-- **Unset — a sign-in.** `bcode login`, the sign-in screen, or the escalation
-  Bcode performs when a headless run couldn't mint. A user is waiting, your
-  stderr reaches them, and you have 300 seconds — enough for a browser round
-  trip or a device code.
+- **Unset — a sign-in.** `bcode login --oauth`/`--device-auth`, the sign-in
+  screen, or the escalation Bcode performs when a headless run couldn't mint.
+  A user is waiting, your stderr reaches them, and you have 300 seconds —
+  enough for a browser round trip or a device code.
 
 ```bash
 #!/bin/sh
@@ -230,29 +310,15 @@ itself. One that must prompt just sits, up to the 300s sign-in ceiling —
 nothing waits on it, the sign-in screen is already up, and that run's stderr
 goes to `~/.bcode/leader.log` rather than to you.
 
-### Environment Variables
+#### Environment Variables
 
 | Variable | Description |
-|----------|-------------|
+|----------|--------------|
 | `BCODE_AUTH_PROVIDER_COMMAND` | Path to your auth binary |
 | `BCODE_AUTH_PROVIDER_LABEL` | Display name on the TUI login screen (e.g., "Acme Corp") |
 | `BCODE_AUTH_TOKEN_TTL` | Token lifetime in seconds (for bare-string tokens without `expires_in`) |
 | `BCODE_AUTH_EXPIRED` | Set to `1` on a headless refresh: don't prompt, and don't hand back a cached token. Unset on a sign-in, where a user is attached |
 | `BCODE_AUTH_EARLY_INVALIDATION_SECS` | Seconds before expiry to proactively refresh (default: 300) |
-
----
-
-## Device Code Flow
-
-For headless environments (SSH sessions, Docker containers, remote VMs) where no browser is available locally:
-
-```bash
-bcode login --device-auth    # or: bcode login --device-code
-```
-
-This prints a URL and code to the terminal. Open the URL on any device, enter the code, and complete authentication. Bcode polls until the login is confirmed.
-
-You can also implement the device-code flow through an [External Auth Provider](#external-auth-provider) for full control.
 
 ---
 
@@ -286,17 +352,19 @@ Bcode picks up changes to `~/.bcode/auth.json` automatically. If you update cred
 
 Bcode resolves credentials for each request in this order, highest to lowest:
 
-1. **Per-model `api_key` or `env_key`** -- set under `[model.<name>]` in `config.toml`. Wins whenever present.
-2. **Active session token** -- obtained through browser, OIDC/OAuth2, or external-provider login and stored in `~/.bcode/auth.json`.
-3. **`BCODE_API_KEY`** -- fallback when no session token is active.
+1. **The model's own `api_key` or `env_key`** -- set under `[model.<name>]` in `config.toml`. Wins whenever present.
+2. **A named account** -- `[model.<name>] account = "<name>"`, resolved from that account's `env_key` or its stored key.
+3. **The provider-wide credential from `bcode login`** -- matched by the model's provider, so one sign-in covers every model on it.
+4. **An `auth_provider` command's cached token** -- the model's own, or its account's.
+5. **The enterprise-SSO session token** -- obtained through `--oauth`/`--device-auth` and stored in `~/.bcode/auth.json`. Only ever sent to first-party bcode endpoints, so it never applies to a BYOK model.
+6. **`BCODE_API_KEY`** -- global fallback.
 
-When more than one login flow is configured, Bcode populates the session token from the first available source, highest to lowest:
+A model naming an account or provider that resolves to nothing gets **no**
+credential rather than falling through further down the list, and
+`bcode inspect` reports it: billing an identity you did not name is worse than
+failing.
 
-1. **External auth provider** (`auth_provider_command`)
-2. **Enterprise OIDC** -- when OIDC is configured, through `[bcode_com_config.oidc]` in `config.toml` or the `BCODE_OIDC_ISSUER` and `BCODE_OIDC_CLIENT_ID` environment variables
-3. **bcode OAuth2 browser login** -- the default
-
-During a session, the active method handles all mid-session refreshes.
+During a session, whichever tier resolved handles that request's refresh on its own terms (proactive for an `auth_provider`, silent for OIDC, none for a static key).
 
 ---
 
@@ -355,7 +423,9 @@ RUST_LOG=debug bcode -p "hello" 2> /tmp/bcode.log
 
 ### Common fixes
 
-- **"Authentication failed"** -- Run `bcode logout` to clear cached credentials, then `bcode login` to sign in again.
-- **Token expires too quickly** -- Set `auth_token_ttl` or return `expires_in` in your auth provider's JSON output.
+- **First launch shows a provider list instead of starting** -- normal: there is no credential yet. Run `bcode login` in a terminal, or export the provider's env var.
+- **"unknown provider"** -- run `bcode login` with no argument to see the current catalog list.
+- **A 401 says "No credential for provider 'x'. Run `bcode login x`."** -- the model resolved no credential at all (no static key, no account, no `bcode login` credential, no `auth_provider`, no session). This is the common case, not a rejected key -- sign in and retry.
+- **A stored key isn't picked up** -- a model's own `api_key`/`env_key`, and any account it names, both win over the provider-wide `bcode login` credential; see [Auth Precedence](#auth-precedence).
 - **OIDC redirect fails** -- Ensure your IdP allows loopback redirect URIs (`http://127.0.0.1/callback`).
 - **External auth provider not found** -- Check that the `auth_provider_command` path is correct and the binary is executable.

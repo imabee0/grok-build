@@ -46,8 +46,17 @@ Start Bcode by running:
 bcode
 ```
 
-Bcode talks to whichever provider you configure, and to nothing else. Give it a
-key for one of them and it starts:
+Bcode talks to whichever provider you configure, and to nothing else. There is
+no bcode account to sign into -- your model provider is the account. Sign in
+to one with:
+
+```bash
+bcode login
+```
+
+Pick a provider, paste its API key when prompted, and every model on that
+provider works with nothing written to `config.toml`. Or skip the wizard and
+export the key yourself:
 
 ```bash
 export DEEPSEEK_API_KEY="sk-..."      # or whichever key your model names
@@ -60,7 +69,7 @@ Credentials Bcode stores itself live in `~/.bcode/`, and nothing is written
 outside that directory, your workspace, and paths you name.
 
 See [Authentication](02-authentication.md) for the full set of auth options
-including OIDC, external auth providers, and device code flow.
+including named accounts, OIDC, and external auth providers.
 
 ---
 
@@ -244,7 +253,7 @@ Deeper files take precedence. Bcode also reads `CLAUDE.md` files for compatibili
 
 | Document | What You Will Learn |
 |----------|-------------------|
-| [Authentication](02-authentication.md) | Browser login, API keys, OIDC, external auth, device code flow |
+| [Authentication](02-authentication.md) | Provider login, API keys, named accounts, OIDC, external auth |
 | [Keyboard Shortcuts](03-keyboard-shortcuts.md) | Complete reference for all key bindings |
 | [Slash Commands](04-slash-commands.md) | All available `/` commands |
 | [Configuration](05-configuration.md) | config.toml, pager.toml, environment variables |
