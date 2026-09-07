@@ -7,18 +7,6 @@ use axum::{
 };
 use std::sync::{Arc, Mutex};
 #[test]
-fn login_config_response_parses_tristate() {
-    let parse = |s: &str| {
-        serde_json::from_str::<LoginConfigResponse>(s)
-            .unwrap()
-            .device_flow
-    };
-    assert_eq!(parse(r#"{"device_flow": true}"#), Some(true));
-    assert_eq!(parse(r#"{"device_flow": false}"#), Some(false));
-    assert_eq!(parse(r#"{"device_flow": null}"#), None);
-    assert_eq!(parse("{}"), None, "absent flag must parse as unset");
-}
-#[test]
 fn get_env_keys_parses_strings_and_rejects_non_strings() {
     use crate::agent::config::EnvKeys;
     let parse = |v: serde_json::Value| {
@@ -38,118 +26,6 @@ fn header_str(headers: &HeaderMap, name: &str) -> Option<String> {
         .get(name)
         .and_then(|v| v.to_str().ok())
         .map(str::to_owned)
-}
-#[derive(Debug, Default, Clone)]
-struct LoginConfigHeaders {
-    authorization: Option<String>,
-    user_id: Option<String>,
-    email: Option<String>,
-    agent_id: Option<String>,
-    client_identifier: Option<String>,
-    client_version: Option<String>,
-}
-#[derive(Clone)]
-struct LoginConfigServerState {
-    status_code: StatusCode,
-    body: String,
-    seen: Arc<Mutex<Vec<LoginConfigHeaders>>>,
-}
-/// Mock cli-chat-proxy serving `GET /v1/login-config` with a fixed status and raw body, recording the request headers it saw.
-async fn start_login_config_server(
-    status_code: StatusCode,
-    body: String,
-) -> (
-    String,
-    Arc<Mutex<Vec<LoginConfigHeaders>>>,
-    tokio::task::JoinHandle<()>,
-) {
-    let seen = Arc::new(Mutex::new(Vec::new()));
-    let state = LoginConfigServerState {
-        status_code,
-        body,
-        seen: seen.clone(),
-    };
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let base = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
-    let app = Router::new()
-        .route(
-            "/v1/login-config",
-            get(
-                |State(state): State<LoginConfigServerState>, headers: HeaderMap| async move {
-                    state.seen.lock().unwrap().push(LoginConfigHeaders {
-                        authorization: header_str(&headers, "authorization"),
-                        user_id: header_str(&headers, "x-userid"),
-                        email: header_str(&headers, "x-email"),
-                        agent_id: header_str(&headers, "x-bcode-agent-id"),
-                        client_identifier: header_str(&headers, "x-bcode-client-identifier"),
-                        client_version: header_str(&headers, "x-bcode-client-version"),
-                    });
-                    (state.status_code, state.body)
-                },
-            ),
-        )
-        .with_state(state);
-    let handle = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-    (format!("{base}/v1"), seen, handle)
-}
-#[tokio::test]
-async fn fetch_login_device_flow_parses_2xx_bodies() {
-    for (body, expected) in [
-        (r#"{"device_flow": true}"#, Some(true)),
-        (r#"{"device_flow": false}"#, Some(false)),
-        (r#"{"device_flow": null}"#, None),
-        (r#"{}"#, None),
-        (r#"{"other": 1}"#, None),
-    ] {
-        let (base, _seen, server) =
-            start_login_config_server(StatusCode::OK, body.to_string()).await;
-        let got = fetch_login_device_flow(&base).await;
-        server.abort();
-        assert_eq!(got, expected, "body {body:?}");
-    }
-}
-#[tokio::test]
-async fn fetch_login_device_flow_errors_return_none() {
-    for (status, body) in [
-        (StatusCode::NOT_FOUND, r#"{"device_flow": true}"#),
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            r#"{"device_flow": true}"#,
-        ),
-        (StatusCode::OK, "not json"),
-    ] {
-        let (base, _seen, server) = start_login_config_server(status, body.to_string()).await;
-        let got = fetch_login_device_flow(&base).await;
-        server.abort();
-        assert_eq!(got, None, "status {status}, body {body:?}");
-    }
-}
-#[tokio::test]
-async fn fetch_login_device_flow_sends_only_unauthenticated_headers() {
-    let (base, seen, server) =
-        start_login_config_server(StatusCode::OK, r#"{"device_flow": true}"#.to_string()).await;
-    let got = fetch_login_device_flow(&base).await;
-    server.abort();
-    assert_eq!(got, Some(true));
-    let seen = seen.lock().unwrap();
-    let h = seen
-        .last()
-        .expect("server should have received one request");
-    assert!(
-        h.agent_id.as_deref().is_some_and(|v| !v.is_empty()),
-        "must send x-bcode-agent-id (the bucketing key)"
-    );
-    assert!(
-        h.client_identifier.is_some(),
-        "must send x-bcode-client-identifier"
-    );
-    assert!(
-        h.client_version.is_some(),
-        "must send x-bcode-client-version"
-    );
-    assert_eq!(h.authorization, None, "must not send Authorization");
-    assert_eq!(h.user_id, None, "must not send x-userid");
-    assert_eq!(h.email, None, "must not send x-email");
 }
 /// Mock cli-chat-proxy serving `GET /settings` with a fixed status and body.
 async fn start_settings_server(

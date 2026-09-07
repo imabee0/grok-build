@@ -625,60 +625,6 @@ fn fetch_settings_blocking_with_attempts(
     tracing::error!(max_attempts, "Settings fetch failed");
     SettingsFetch::Retry
 }
-#[derive(Deserialize)]
-struct LoginConfigResponse {
-    /// Tri-state: `Some` forces a transport; `None` or an absent flag keeps the client default.
-    #[serde(default)]
-    device_flow: Option<bool>,
-}
-/// Fetch `bcode_login_device_flow` from cli-chat-proxy `GET /v1/login-config`.
-///
-/// Unauthenticated (pre-login); `x-bcode-agent-id` is the per-install bucketing key.
-/// Best-effort: any error or unset flag returns `None` so the caller keeps the loopback default.
-/// Caps at 1.5s with no retries since it's on the login path.
-pub async fn fetch_login_device_flow(cli_chat_proxy_base_url: &str) -> Option<bool> {
-    let agent_id = tokio::task::spawn_blocking(bcode_telemetry::id::agent_id)
-        .await
-        .ok()?;
-    let client = crate::http::shared_client();
-    let url = format!("{}/login-config", cli_chat_proxy_base_url);
-    let response = client
-        .get(&url)
-        .timeout(std::time::Duration::from_millis(1500))
-        .header("x-bcode-agent-id", agent_id)
-        .header("x-bcode-client-version", bcode_version::VERSION)
-        .header(
-            "x-bcode-client-identifier",
-            crate::http::process_client_identifier(),
-        )
-        .header(
-            crate::http::CLIENT_MODE_HEADER,
-            crate::http::process_client_mode(),
-        )
-        .send()
-        .await;
-    let resp = match response {
-        Ok(resp) if resp.status().is_success() => resp,
-        Ok(resp) => {
-            tracing::debug!(status = resp.status().as_u16(), "login-config fetch failed");
-            return None;
-        }
-        Err(e) => {
-            tracing::debug!("login-config fetch error: {e}");
-            return None;
-        }
-    };
-    match resp.json::<LoginConfigResponse>().await {
-        Ok(cfg) => {
-            tracing::debug!(device_flow = ?cfg.device_flow, "Fetched remote login-config");
-            cfg.device_flow
-        }
-        Err(e) => {
-            tracing::debug!("Failed to parse login-config response: {e}");
-            None
-        }
-    }
-}
 /// Default context window when the remote endpoint doesn't provide one.
 pub(crate) const DEFAULT_CONTEXT_WINDOW: u64 = 256_000;
 pub struct FetchModelsResult {

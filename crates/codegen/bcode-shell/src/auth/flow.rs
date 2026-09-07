@@ -101,8 +101,10 @@ async fn cli_should_use_device(
 }
 /// Whether interactive bcode OAuth2 login uses the RFC 8628 device flow (vs loopback).
 ///
-/// Precedence, highest first: the `--oauth`/`--device-auth` CLI flags, `BCODE_LOGIN_DEVICE_FLOW` env, then `[auth] login_device_flow` config.
-/// Below those, the `bcode_login_device_flow` remote feature flag decides; loopback is the default.
+/// Precedence, highest first: the `--oauth`/`--device-auth` CLI flags, `BCODE_LOGIN_DEVICE_FLOW`
+/// env, then `[auth] login_device_flow` config; loopback is the default. There is no remote
+/// feature-flag tier: login makes no network call the chosen provider didn't cause, and
+/// resolving the login transport happens before any provider is even chosen.
 async fn should_use_device_flow(login_override: LoginTransportOverride) -> bool {
     if let LoginTransportOverride::Preresolved(use_device) = login_override {
         return use_device;
@@ -110,26 +112,9 @@ async fn should_use_device_flow(login_override: LoginTransportOverride) -> bool 
     let resolved = if login_override.as_cli_bool().is_some() {
         resolve_device_flow(login_override, None, None)
     } else {
-        let env = crate::agent::config::env_bool("BCODE_LOGIN_DEVICE_FLOW");
         let effective = crate::config::load_effective_config().ok();
         let config = config_login_device_flow(effective.as_ref());
-        let remote = if env.is_none() && config.is_none() {
-            let proxy_url = effective
-                .as_ref()
-                .map(crate::agent::config::EndpointsConfig::from_config_value)
-                .unwrap_or_default()
-                .proxy_url();
-            tokio::time::timeout(
-                std::time::Duration::from_secs(2),
-                crate::remote::fetch_login_device_flow(&proxy_url),
-            )
-            .await
-            .ok()
-            .flatten()
-        } else {
-            None
-        };
-        resolve_device_flow(login_override, config, remote)
+        resolve_device_flow(login_override, config, None)
     };
     tracing::info!(
         transport = if resolved.value { "device" } else { "loopback" },
@@ -826,15 +811,7 @@ pub async fn run_cli_login(
     config: &crate::agent::config::Config,
     oauth: bool,
     device_auth: bool,
-    devbox: bool,
 ) -> anyhow::Result<()> {
-    if devbox {
-        if !ActiveAuthBackend::default().is_bcode_authority() {
-            anyhow::bail!("--devbox mints an bcode credential, which this build cannot use");
-        }
-        let auth = super::devbox_login::run_devbox_login(config).await?;
-        return apply_post_login_config(auth).await;
-    }
     let auth_manager = Arc::new(AuthManager::new(
         &bcode_home::bcode_home(),
         config.bcode_com_config.clone(),
