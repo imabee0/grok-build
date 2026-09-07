@@ -476,6 +476,14 @@ impl ModelsManager {
             .is_some_and(|a| a.is_session_auth())
     }
 
+    /// The current session's cached bearer, if any -- so a model visible only
+    /// via session auth (a remote/enterprise gateway merge) can resolve as
+    /// credentialed rather than being judged against a `None` that only ever
+    /// holds for the static BYOK catalog.
+    fn session_key(&self) -> Option<String> {
+        self.inner.auth_manager.current_or_expired().map(|a| a.key)
+    }
+
     /// ACP-visible (non-hidden) projection of the catalog.
     pub fn available(&self) -> IndexMap<acp::ModelId, acp::ModelInfo> {
         let snapshot = {
@@ -489,7 +497,11 @@ impl ModelsManager {
             .filter(|(_, e)| e.info.user_selectable)
             .collect();
 
-        available_models(&selectable, self.is_session_auth())
+        available_models(
+            &selectable,
+            self.is_session_auth(),
+            self.session_key().as_deref(),
+        )
     }
 
     pub(crate) fn task_model_error(&self, requested: &str) -> Option<String> {

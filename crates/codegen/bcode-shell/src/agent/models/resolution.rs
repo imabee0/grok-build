@@ -144,16 +144,21 @@ pub(crate) fn resolve_default_model(
 }
 
 /// Filter hidden and auth-gated entries out of `catalog` and convert to ACP wire format.
+/// `session_key` (the caller's cached bearer, if any) flows into each entry's
+/// `hasCredential` meta: a model visible only via session auth (remote/enterprise
+/// gateway merge, `supported_in_api: false`) needs the real key to resolve as
+/// credentialed, not just the `is_session_auth` flag that gated its visibility.
 pub(crate) fn available_models(
     catalog: &IndexMap<String, ModelEntry>,
     is_session_auth: bool,
+    session_key: Option<&str>,
 ) -> IndexMap<acp::ModelId, acp::ModelInfo> {
     let visible: IndexMap<String, ModelEntry> = catalog
         .iter()
         .filter(|(_, e)| e.info.visible_for_auth(is_session_auth))
         .map(|(k, v)| (k.clone(), v.clone()))
         .collect();
-    config::to_acp_model_info(&visible)
+    config::to_acp_model_info(&visible, session_key)
 }
 
 /// Compiled glob matcher shared by `allowed_models`, `disabled_models`, and `hidden_models` (matched against catalog key or model id).

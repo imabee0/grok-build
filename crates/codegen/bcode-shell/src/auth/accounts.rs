@@ -57,32 +57,47 @@ const MAX_ACCOUNT_NAME: usize = 64;
 
 /// What kind of credential an account holds.
 ///
-/// Only `ApiKey` is implemented. `Oauth` is reserved for subscription sign-in:
-/// it parses, so a config written against it keeps working, but it resolves no
-/// credential and says so rather than serving whatever key happens to be
-/// stored. Which provider such an account signs in to is named by `provider`,
-/// against the catalog — provider names live in the catalog data file, not in
-/// this enum.
+/// `ApiKey` and `Command` are implemented. `Oauth` and `Oidc` are reserved:
+/// each parses, so a config written against it keeps working, but it resolves
+/// no credential and says so rather than serving whatever key happens to be
+/// stored. Both need the same real, not-yet-built piece of work: the existing
+/// interactive PKCE/device-code login flow mints a token and immediately
+/// persists it as bcode's own singleton session (team-principal enforcement,
+/// a first-party enrichment call, its own scope in `auth.json`) -- an account
+/// needs "obtain tokens for an arbitrary issuer" split out from "persist as
+/// the one signed-in identity," which is a live-network-verified change this
+/// fork has not made. `Oauth` additionally needs real OAuth app credentials
+/// registered with each provider (issuer, client id, redirect URI) before it
+/// can drive that flow at all -- see `provider` below.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum AccountKind {
     /// A provider API key, from `env_key` or from `bcode account add`.
     #[default]
     ApiKey,
-    /// Reserved: interactive sign-in against the account's `provider`.
+    /// An external command mints the credential -- the same contract as
+    /// `[auth_provider.<name>]`, named by this account's `auth_provider` field.
+    Command,
+    /// Reserved: sign in against the account's `provider` via that provider's
+    /// own subscription OAuth (e.g. a ChatGPT Plus subscription).
     Oauth,
+    /// Reserved: sign in against `provider` via your own OIDC IdP (customer
+    /// SSO), independent of bcode's one global session.
+    Oidc,
 }
 
 impl AccountKind {
     /// Whether this kind can resolve a credential today.
     pub fn is_implemented(self) -> bool {
-        matches!(self, Self::ApiKey)
+        matches!(self, Self::ApiKey | Self::Command)
     }
 
     pub fn as_str(self) -> &'static str {
         match self {
             Self::ApiKey => "api-key",
+            Self::Command => "command",
             Self::Oauth => "oauth",
+            Self::Oidc => "oidc",
         }
     }
 }
@@ -101,6 +116,12 @@ pub struct AccountConfig {
     /// Which catalog provider this account signs in to. Only meaningful for
     /// `kind = "oauth"`, which is not implemented yet.
     pub provider: Option<String>,
+    /// For `kind = "command"`: the `[auth_provider.<name>]` table this
+    /// account mints its credential from. Reuses that contract (spawn a
+    /// command, read stdout, cache with TTL) instead of a second
+    /// command-running implementation; resolved by `resolve_model_list`
+    /// exactly like a model's own `auth_provider` field.
+    pub auth_provider: Option<String>,
     /// Free-text label for `bcode account list`.
     pub description: Option<String>,
 }
@@ -115,11 +136,21 @@ pub struct AccountRef {
     pub name: String,
     #[serde(skip)]
     config: AccountConfig,
+    /// Resolved `[auth_provider.<name>]` backing a `kind = "command"` account,
+    /// attached by `resolve_model_list` the same way a model's own
+    /// `auth_provider` ref is. `None` until attached, or when this account's
+    /// `auth_provider` names no trusted table.
+    #[serde(skip)]
+    auth_provider: Option<crate::auth::AuthProviderRef>,
 }
 
 impl AccountRef {
     pub fn new(name: String, config: AccountConfig) -> Self {
-        Self { name, config }
+        Self {
+            name,
+            config,
+            auth_provider: None,
+        }
     }
 
     /// The name alone, for a ref revived from bytes (a persisted session) whose
@@ -128,6 +159,7 @@ impl AccountRef {
         Self {
             name,
             config: AccountConfig::default(),
+            auth_provider: None,
         }
     }
 
@@ -135,7 +167,34 @@ impl AccountRef {
         self.config.kind
     }
 
-    /// This account's credential: `env_key` first, then the stored key.
+    /// Attach this account's resolved `[auth_provider.<name>]` table, if its
+    /// config names one. A no-op unless `kind = "command"` and `auth_provider`
+    /// is set; called once, alongside the model-level attach, by
+    /// `resolve_model_list`.
+    pub fn attach_auth_provider(&mut self, provider: crate::auth::AuthProviderRef) {
+        self.auth_provider = Some(provider);
+    }
+
+    /// The name of the `[auth_provider.<name>]` table this account's config
+    /// requests, if any -- read by `resolve_model_list` to look it up and
+    /// call [`Self::attach_auth_provider`].
+    pub fn wants_auth_provider(&self) -> Option<&str> {
+        self.config.auth_provider.as_deref()
+    }
+
+    /// The resolved auth-provider ref, if attached. `effective_auth_provider`
+    /// on the owning model falls back to this when the model has none of its
+    /// own, so the existing pre-turn mint/refresh hook picks up a
+    /// `kind = "command"` account with no other wiring.
+    pub fn auth_provider(&self) -> Option<&crate::auth::AuthProviderRef> {
+        self.auth_provider.as_ref()
+    }
+
+    /// This account's credential.
+    ///
+    /// `ApiKey`: `env_key` first, then the stored key.
+    /// `Command`: the attached auth-provider's cached token (minted/refreshed
+    /// by the same pre-turn hook a model's own `auth_provider` uses).
     ///
     /// `None` when the account holds nothing yet, or when its kind is not one
     /// this build can resolve — never a partial or placeholder credential.
@@ -147,6 +206,9 @@ impl AccountRef {
                 "account kind is not implemented yet; no credential resolved"
             );
             return None;
+        }
+        if self.config.kind == AccountKind::Command {
+            return self.auth_provider.as_ref().and_then(|p| p.cached_token());
         }
         if let Some(key) = self
             .config

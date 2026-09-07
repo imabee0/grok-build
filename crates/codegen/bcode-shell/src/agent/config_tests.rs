@@ -2313,7 +2313,7 @@ fn acp_model_meta_includes_agent_type_when_present() {
     entry.info.context_window = NonZeroU64::new(256_000).unwrap();
     entry.info.agent_type = "codex".to_string();
     models.insert("test-model".to_string(), entry);
-    let acp_models = to_acp_model_info(&models);
+    let acp_models = to_acp_model_info(&models, None);
     let acp_model = acp_models.values().next().expect("should have one model");
     let meta = acp_model.meta.as_ref().expect("meta should be present");
     assert_eq!(meta["agentType"], "codex");
@@ -2326,13 +2326,106 @@ fn acp_model_meta_always_includes_agent_type() {
     entry.info.name = Some("Plain Model".to_string());
     entry.info.context_window = NonZeroU64::new(256_000).unwrap();
     models.insert("plain-model".to_string(), entry);
-    let acp_models = to_acp_model_info(&models);
+    let acp_models = to_acp_model_info(&models, None);
     let acp_model = acp_models.values().next().expect("should have one model");
     let meta = acp_model.meta.as_ref().expect("meta should be present");
     assert_eq!(meta["totalContextTokens"], 256_000);
     assert_eq!(
         meta["agentType"], DEFAULT_AGENT_TYPE,
         "agentType should always be in meta, defaulting to DEFAULT_AGENT_TYPE"
+    );
+}
+/// The model picker groups by provider and marks credential status from these
+/// two meta keys; both must be present so a client that reads only ACP-level
+/// data (never `ModelEntry`) can still show them.
+///
+/// The no-credential case uses a model_family no real `provider::<id>` in
+/// `auth.json` could ever match, rather than a real provider id: `hasCredential`
+/// for a model with none of its own falls through to the provider-credential
+/// tier, which reads the real `bcode_home()` -- a synthetic id keeps this test
+/// hermetic regardless of what is actually signed in on the machine running it.
+#[test]
+#[serial]
+fn acp_model_meta_reports_provider_and_credential_status() {
+    let _no_global_key = EnvGuard::unset("BCODE_API_KEY");
+    let _no_legacy_key = EnvGuard::unset("BCODE_CODE_BCODE_API_KEY");
+    let mut models = IndexMap::new();
+    let mut with_key = test_model_entry(
+        "ds",
+        "https://api.deepseek.com/v1",
+        Some("sk-x"),
+        None,
+        None,
+    );
+    with_key.info.model_family = Some("deepseek".to_string());
+    models.insert("ds".to_string(), with_key);
+    let mut no_key = test_model_entry("unsigned", "https://unsigned.example/v1", None, None, None);
+    no_key.info.model_family = Some("test-provider-never-signed-in-3f8a1c".to_string());
+    models.insert("unsigned".to_string(), no_key);
+    let mut no_family = test_model_entry(
+        "custom",
+        "https://gateway.example/v1",
+        Some("sk-y"),
+        None,
+        None,
+    );
+    no_family.info.model_family = None;
+    models.insert("custom".to_string(), no_family);
+    let acp = to_acp_model_info(&models, None);
+    let meta_of = |id: &str| acp[&acp::ModelId::new(id)].meta.clone().unwrap();
+    assert_eq!(meta_of("ds")["provider"], "deepseek");
+    assert_eq!(meta_of("ds")["hasCredential"], true);
+    assert_eq!(
+        meta_of("unsigned")["provider"],
+        "test-provider-never-signed-in-3f8a1c"
+    );
+    assert_eq!(meta_of("unsigned")["hasCredential"], false);
+    assert!(
+        meta_of("custom").get("provider").is_none(),
+        "a model with no model_family has no provider to group by"
+    );
+    assert_eq!(meta_of("custom")["hasCredential"], true);
+}
+
+/// A model visible only through session auth (a remote/enterprise-gateway merge,
+/// first-party `base_url`, no static key of its own) must report `hasCredential`
+/// against the real session key, not a hardcoded `None` -- otherwise an
+/// enterprise-SSO user with a live session sees every such model mislabeled as
+/// having no credential.
+#[test]
+#[serial]
+fn acp_model_meta_credits_the_session_bearer_for_first_party_models() {
+    let _no_global_key = EnvGuard::unset("BCODE_API_KEY");
+    let _no_legacy_key = EnvGuard::unset("BCODE_CODE_BCODE_API_KEY");
+    let mut models = IndexMap::new();
+    let entry = test_model_entry(
+        "gateway-model",
+        "https://api.bcode.invalid/v1",
+        None,
+        None,
+        None,
+    );
+    models.insert("gateway-model".to_string(), entry);
+
+    let meta_of = |acp: &IndexMap<acp::ModelId, acp::ModelInfo>| {
+        acp[&acp::ModelId::new("gateway-model")]
+            .meta
+            .clone()
+            .unwrap()
+    };
+
+    let without_session = to_acp_model_info(&models, None);
+    assert_eq!(
+        meta_of(&without_session)["hasCredential"],
+        false,
+        "no session key and no static credential: correctly uncredentialed"
+    );
+
+    let with_session = to_acp_model_info(&models, Some("cached-session-bearer"));
+    assert_eq!(
+        meta_of(&with_session)["hasCredential"],
+        true,
+        "a first-party model resolves through the session bearer once one is passed"
     );
 }
 #[test]
@@ -2342,7 +2435,7 @@ fn acp_model_meta_emits_reasoning_effort_when_supported() {
     entry.info.supports_reasoning_effort = true;
     entry.info.reasoning_effort = Some(ReasoningEffort::High);
     models.insert("m".to_string(), entry);
-    let meta = to_acp_model_info(&models)
+    let meta = to_acp_model_info(&models, None)
         .values()
         .next()
         .unwrap()
@@ -2358,7 +2451,7 @@ fn acp_model_meta_supports_without_default_effort() {
     let mut entry = test_model_entry("m", "https://test.api/v1", None, None, None);
     entry.info.supports_reasoning_effort = true;
     models.insert("m".to_string(), entry);
-    let meta = to_acp_model_info(&models)
+    let meta = to_acp_model_info(&models, None)
         .values()
         .next()
         .unwrap()
@@ -2390,7 +2483,7 @@ fn acp_model_meta_emits_reasoning_efforts_and_derives_legacy() {
     ];
     entry.info.derive_reasoning_effort_fields();
     models.insert("m".to_string(), entry);
-    let meta = to_acp_model_info(&models)
+    let meta = to_acp_model_info(&models, None)
         .values()
         .next()
         .unwrap()
@@ -2409,7 +2502,7 @@ fn acp_model_meta_omits_reasoning_efforts_when_list_empty() {
     entry.info.supports_reasoning_effort = true;
     entry.info.reasoning_effort = Some(ReasoningEffort::Medium);
     models.insert("m".to_string(), entry);
-    let meta = to_acp_model_info(&models)
+    let meta = to_acp_model_info(&models, None)
         .values()
         .next()
         .unwrap()
@@ -2434,7 +2527,7 @@ fn acp_model_meta_keeps_explicit_scalar_when_list_present() {
     }];
     entry.info.derive_reasoning_effort_fields();
     models.insert("m".to_string(), entry);
-    let meta = to_acp_model_info(&models)
+    let meta = to_acp_model_info(&models, None)
         .values()
         .next()
         .unwrap()
@@ -2466,7 +2559,7 @@ fn acp_model_meta_derives_first_option_when_no_default() {
     ];
     entry.info.derive_reasoning_effort_fields();
     models.insert("m".to_string(), entry);
-    let meta = to_acp_model_info(&models)
+    let meta = to_acp_model_info(&models, None)
         .values()
         .next()
         .unwrap()
@@ -2482,7 +2575,7 @@ fn acp_model_meta_omits_reasoning_when_unsupported() {
     let mut entry = test_model_entry("m", "https://test.api/v1", None, None, None);
     entry.info.reasoning_effort = Some(ReasoningEffort::High);
     models.insert("m".to_string(), entry);
-    let meta = to_acp_model_info(&models)
+    let meta = to_acp_model_info(&models, None)
         .values()
         .next()
         .unwrap()
@@ -2499,7 +2592,7 @@ fn acp_model_meta_always_has_context_window() {
     let mut entry = test_model_entry("unknown-model", "https://test.api/v1", None, None, None);
     entry.info.name = Some("Unknown Model".to_string());
     models.insert("unknown-model".to_string(), entry);
-    let acp_models = to_acp_model_info(&models);
+    let acp_models = to_acp_model_info(&models, None);
     let meta = acp_models.values().next().unwrap().meta.as_ref().unwrap();
     assert_eq!(meta["totalContextTokens"], 200_000);
 }
@@ -2523,7 +2616,7 @@ fn hidden_model_excluded_from_acp_but_kept_in_catalog() {
     .unwrap();
     let cfg = Config::new_from_toml_cfg(&raw_config).unwrap();
     let catalog = resolve_model_catalog(&cfg, None);
-    let available = available_models(&catalog, true);
+    let available = available_models(&catalog, true, None);
     assert!(
         catalog.contains_key("visible-model"),
         "visible model missing from catalog"
@@ -2573,7 +2666,7 @@ fn hidden_models_kept_in_catalog_but_not_in_acp() {
     )
     .unwrap();
     let catalog = resolve_model_catalog(&Config::new_from_toml_cfg(&raw).unwrap(), None);
-    let available = available_models(&catalog, true);
+    let available = available_models(&catalog, true, None);
     assert!(catalog.contains_key("to-hide"));
     assert!(catalog["to-hide"].info.hidden);
     assert!(!available.values().any(|m| m.name == "to-hide"));
@@ -2673,10 +2766,10 @@ fn supported_in_api_false_hides_from_api_key_users() {
     let catalog = resolve_model_catalog(&cfg, None);
     assert!(catalog.contains_key("oauth-only-model"));
     assert!(catalog.contains_key("public-model"));
-    let api_available = available_models(&catalog, false);
+    let api_available = available_models(&catalog, false, None);
     assert!(!api_available.values().any(|m| m.name == "oauth-only-model"));
     assert!(api_available.values().any(|m| m.name == "public-model"));
-    let oauth_available = available_models(&catalog, true);
+    let oauth_available = available_models(&catalog, true, None);
     assert!(
         oauth_available
             .values()
@@ -3398,7 +3491,7 @@ fn e2e_acp_model_info_no_dedup_on_model_field() {
             None,
         ),
     );
-    let acp_models = to_acp_model_info(&models);
+    let acp_models = to_acp_model_info(&models, None);
     assert_eq!(
         acp_models.len(),
         2,
@@ -8194,5 +8287,54 @@ fn a_reserved_account_kind_warns_and_resolves_to_no_credential() {
     assert_eq!(
         resolve_credentials(resolved.get("plan").expect("model"), None).api_key,
         None
+    );
+}
+/// `kind = "command"` reuses the `[auth_provider.<name>]` contract rather than
+/// a second command-running implementation: cold cache resolves to nothing
+/// (the command has not run), and after a warm mint the account's credential
+/// -- and the model's `effective_auth_provider`, the same accessor the
+/// pre-turn mint/refresh hook consults -- both see it.
+#[tokio::test]
+async fn a_command_account_mints_through_the_auth_provider_contract() {
+    let raw_config: toml::Value = toml::from_str(
+        r#"
+            [auth_provider.corp-mint]
+            command = "printf command-account-token"
+
+            [accounts.corp]
+            kind = "command"
+            auth_provider = "corp-mint"
+
+            [model.plan]
+            model = "m"
+            base_url = "https://api.example.com/v1"
+            context_window = 200000
+            account = "corp"
+            "#,
+    )
+    .unwrap();
+    let cfg = Config::new_from_toml_cfg(&raw_config).expect("config should parse");
+    let resolved = resolve_model_list(&cfg, None);
+    let model = resolved.get("plan").expect("model");
+    let account = model.account.as_ref().expect("account attached");
+    assert_eq!(account.kind(), crate::auth::AccountKind::Command);
+    let provider = account
+        .auth_provider()
+        .expect("command account resolves an auth_provider ref")
+        .clone();
+    assert_eq!(
+        model.effective_auth_provider().map(|p| p.name.as_str()),
+        Some("corp-mint"),
+        "the pre-turn mint hook must see the account's provider as the model's own"
+    );
+    assert_eq!(
+        resolve_credentials(model, None).api_key,
+        None,
+        "cold cache: the command has not run yet"
+    );
+    let _ = provider.ensure_fresh_token(None).await;
+    assert_eq!(
+        resolve_credentials(model, None).api_key.as_deref(),
+        Some("command-account-token")
     );
 }

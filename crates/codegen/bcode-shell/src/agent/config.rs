@@ -3620,10 +3620,24 @@ pub(crate) fn resolve_model_list(
         if let Some(ref account) = entry.account {
             match cfg.accounts.get(&account.name) {
                 Some(config) => {
-                    entry.account = Some(crate::auth::AccountRef::new(
-                        account.name.clone(),
-                        config.clone(),
-                    ));
+                    let mut resolved_account =
+                        crate::auth::AccountRef::new(account.name.clone(), config.clone());
+                    if let Some(provider_name) = resolved_account.wants_auth_provider() {
+                        let mut provider =
+                            crate::auth::AuthProviderRef::unresolved(provider_name.to_owned());
+                        let provider_config = cfg.auth_providers.get(provider_name);
+                        if provider_config.is_none() {
+                            tracing::debug!(
+                                model_key = %key,
+                                account = %account.name,
+                                auth_provider = %provider_name,
+                                "account's auth_provider has no trusted config; failing closed with an empty command"
+                            );
+                        }
+                        provider.attach_trusted_config(provider_config);
+                        resolved_account.attach_auth_provider(provider);
+                    }
+                    entry.account = Some(resolved_account);
                 }
                 None => {
                     // An undefined account resolves to nothing rather than
@@ -4490,13 +4504,37 @@ impl ModelEntry {
         if self.own_credential().is_some() {
             return None;
         }
-        self.auth_provider.as_ref()
+        self.auth_provider.as_ref().or_else(|| {
+            // A `kind = "command"` account resolved to no auth_provider of its
+            // own falls back here, giving the existing pre-turn mint/refresh
+            // hook (which consults this same accessor) a ref to mint through.
+            self.account
+                .as_ref()
+                .and_then(crate::auth::AccountRef::auth_provider)
+        })
     }
     /// `true` when the model has a non-empty `api_key`, an `env_key` that resolves to a non-empty value, a named account, or a named auth provider.
     /// Probes `std::env::var` at call time: result is not stable across env changes.
     /// Never executes a provider command.
     pub(crate) fn has_own_credentials(&self) -> bool {
         self.own_credential().is_some() || self.account.is_some() || self.auth_provider.is_some()
+    }
+    /// Whether this model currently has *some* resolvable credential -- its
+    /// own key, a named account, the provider-wide credential, a cached
+    /// auth-provider token, the session bearer, or the global `BCODE_API_KEY`
+    /// -- via the same resolution `resolve_credentials` uses at request time.
+    ///
+    /// Unlike [`Self::has_own_credentials`], which only checks whether a
+    /// static key/account/auth_provider is *attached* (not whether it
+    /// resolves), this is what a UI should show as "usable." `session_key` is
+    /// the current session's cached bearer, if any -- pass the real one
+    /// rather than `None` whenever it's available: a statically-catalogued
+    /// BYOK model never routes a session bearer to its host, so `None`
+    /// reports the same either way, but a model merged in from a remote or
+    /// enterprise gateway can be visible *only* via session auth
+    /// (`ModelInfo::visible_for_auth`), and for those `None` under-reports.
+    pub fn has_any_credential(&self, session_key: Option<&str>) -> bool {
+        resolve_credentials(self, session_key).api_key.is_some()
     }
 }
 impl std::ops::Deref for ModelEntry {
@@ -5457,6 +5495,7 @@ pub(crate) fn resolve_web_search_sampling_config(
 }
 pub(crate) fn to_acp_model_info(
     models: &IndexMap<String, ModelEntry>,
+    session_key: Option<&str>,
 ) -> IndexMap<acp::ModelId, acp::ModelInfo> {
     models
         .iter()
@@ -5492,7 +5531,24 @@ pub(crate) fn to_acp_model_info(
                         reasoning_efforts_meta_value(&info.reasoning_efforts),
                     );
                 }
-                if map.is_empty() { None } else { Some(map) }
+                // The provider a model belongs to and whether it currently has
+                // a usable credential, so a client can group the picker by
+                // provider and mark rows with nothing to authenticate with.
+                // The session key is passed through (not hardcoded `None`):
+                // a model merged in from a remote/enterprise gateway can have
+                // `supported_in_api: false` and be visible only via session
+                // auth, so it needs the real key to resolve as credentialed.
+                if let Some(provider) = info.model_family.as_deref() {
+                    map.insert(
+                        "provider".to_string(),
+                        serde_json::Value::String(provider.to_string()),
+                    );
+                }
+                map.insert(
+                    "hasCredential".to_string(),
+                    serde_json::Value::Bool(model.has_any_credential(session_key)),
+                );
+                Some(map)
             };
             (
                 model_id.clone(),
