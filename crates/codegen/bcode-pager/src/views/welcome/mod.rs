@@ -862,7 +862,27 @@ fn render_welcome_blocked(
 ) -> (Vec<Rect>, Option<crate::terminal::overlay::PostFlush>) {
     let theme = Theme::current();
 
-    let msg_height = if message.is_some() { 2u16 } else { 0u16 };
+    // A message can be multi-line (e.g. `provider_sign_in_hint`'s provider
+    // list): one `Line` per `\n`-split segment, not one `Line` holding embedded
+    // newlines -- ratatui does not wrap those, so anything past the first line
+    // would otherwise render blank. Clamp so one pathological message can't
+    // starve the logo/menu of layout space.
+    const MAX_MESSAGE_LINES: usize = 6;
+    let message_lines: Vec<Line> = message
+        .map(|(text, color)| {
+            text.lines()
+                .take(MAX_MESSAGE_LINES)
+                .map(|segment| {
+                    Line::from(Span::styled(
+                        segment.to_string(),
+                        Style::default().fg(color),
+                    ))
+                    .alignment(Alignment::Center)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let msg_height = message_lines.len() as u16;
     let menu_height = menu_items.len() as u16;
     // Force the stacked layout: this renderer only paints the stacked logo/menu rects, which the hero-box layout would leave empty
     let layout = WelcomeLayout::compute_stacked(WelcomeLayoutInput {
@@ -876,10 +896,8 @@ fn render_welcome_blocked(
 
     render_logo(layout.logo, buf, &theme, content_area.height);
 
-    if let Some((text, color)) = message {
-        let line =
-            Line::from(Span::styled(text, Style::default().fg(color))).alignment(Alignment::Center);
-        Paragraph::new(line).render(layout.error, buf);
+    if !message_lines.is_empty() {
+        Paragraph::new(message_lines).render(layout.error, buf);
     }
 
     // Inset the menu the same as the input bar / post-auth menu
@@ -2694,6 +2712,56 @@ mod tests {
         assert!(
             !footer.ends_with('\u{2502}'),
             "footer must not end on a separator: {footer:?}"
+        );
+    }
+
+    /// `render_welcome_blocked` used to reserve a fixed 2-row `error_height` and
+    /// render the message as one `Line`, which does not split on embedded `\n`
+    /// -- so a multi-line message (e.g. the provider sign-in list) silently
+    /// dropped everything after its first line. Every line must now render,
+    /// and the menu below it must still be intact, not overwritten.
+    #[test]
+    fn welcome_blocked_message_renders_every_line() {
+        let area = Rect::new(0, 0, 80, 30);
+        let mut buf = Buffer::empty(area);
+        let message = "Sign in to a provider:\nAlpha Provider\nBeta Provider";
+        let menu = [("l", "Do the thing"), ("q", "Quit")];
+        let (menu_rects, _) = render_welcome_blocked(
+            area,
+            &mut buf,
+            Some((message, Theme::current().accent_error)),
+            &menu,
+            None,
+            None,
+            0,
+            false,
+        );
+
+        let rendered: String = buf
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<Vec<_>>()
+            .join("");
+        for line in message.lines() {
+            assert!(
+                rendered.contains(line),
+                "expected {line:?} to render somewhere in the buffer"
+            );
+        }
+
+        assert_eq!(menu_rects.len(), menu.len(), "both menu rows must render");
+        let menu_text: String = menu_rects
+            .iter()
+            .flat_map(|rect| {
+                (rect.y..rect.y + rect.height)
+                    .flat_map(move |y| (rect.x..rect.x + rect.width).map(move |x| (x, y)))
+            })
+            .filter_map(|(x, y)| buf.cell((x, y)).map(|c| c.symbol().to_string()))
+            .collect();
+        assert!(
+            menu_text.contains("Do the thing") || rendered.contains("Do the thing"),
+            "the menu label must survive: {rendered:?}"
         );
     }
 
