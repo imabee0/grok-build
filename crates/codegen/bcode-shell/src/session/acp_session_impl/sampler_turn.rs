@@ -1494,12 +1494,8 @@ impl SessionActor {
                 .map(|c| c.model)
                 .unwrap_or_else(|| "unknown".to_string());
 
-            let available: Vec<String> = self
-                .models_manager
-                .models()
-                .values()
-                .map(|m| m.model.clone())
-                .collect();
+            let models = self.models_manager.models();
+            let available: Vec<String> = models.values().map(|m| m.model.clone()).collect();
 
             let mut msg = format!("{detailed_message}\n");
             msg.push_str(&format!("\n  Model:     {current_model}"));
@@ -1523,6 +1519,21 @@ impl SessionActor {
                     current_model
                 ));
                 msg.push_str("\n  Switch models with /model or start a new session.");
+            }
+
+            // A 401 with nothing resolvable at all (no static key, no account, no
+            // provider-wide `bcode login` credential, no auth_provider, no session)
+            // is almost always "never signed in" rather than a rejected credential --
+            // name the fix instead of just the rejection.
+            if is_auth_401
+                && let Some(entry) = models.values().find(|m| m.model == current_model)
+                && !entry.has_any_credential(None)
+                && let Some(provider_id) = entry.info().model_family.as_deref()
+                && bcode_models::provider(provider_id).is_some()
+            {
+                msg.push_str(&format!(
+                    "\n\n  No credential for provider '{provider_id}'. Run `bcode login {provider_id}`."
+                ));
             }
 
             msg
