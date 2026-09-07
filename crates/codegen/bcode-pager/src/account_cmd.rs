@@ -81,7 +81,7 @@ fn add(home: &std::path::Path, name: &str, from_env: Option<&str>) -> Result<()>
 /// A pipe (`echo $KEY | bcode account add ds-main`) is the scriptable path. An
 /// interactive terminal is prompted, and the key still comes off stdin rather
 /// than an argument, so it never lands in the shell history or in `ps`.
-fn read_key_from_stdin(name: &str) -> Result<String> {
+pub(crate) fn read_key_from_stdin(name: &str) -> Result<String> {
     use std::io::BufRead;
     if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
         // The terminal still echoes what is typed; what this buys is that the

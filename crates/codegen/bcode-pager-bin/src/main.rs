@@ -52,12 +52,12 @@ fn process_identity(command: Option<&Command>, is_interactive: bool) -> Option<P
     let (entrypoint, interactivity) = match command {
         Some(Command::Agent(_)) => return None,
         Some(Command::Dashboard) => return None,
-        Some(Command::Login { .. }) => (Entrypoint::Cli, Interactivity::Interactive),
+        Some(Command::Login(_)) => (Entrypoint::Cli, Interactivity::Interactive),
         Some(
             Command::Inspect { .. }
             | Command::Doctor(_)
             | Command::Leader(_)
-            | Command::Logout
+            | Command::Logout(_)
             | Command::Mcp(_)
             | Command::Plugin(_)
             | Command::Memory(_)
@@ -98,8 +98,8 @@ fn command_needs_pre_sandbox_policy_heal(command: Option<&Command>) -> bool {
             Command::Inspect { .. }
             | Command::Doctor(_)
             | Command::Leader(_)
-            | Command::Logout
-            | Command::Login { .. }
+            | Command::Logout(_)
+            | Command::Login(_)
             | Command::Mcp(_)
             | Command::Plugin(_)
             | Command::Memory(_)
@@ -2239,25 +2239,19 @@ async fn async_main(args: PagerArgs) -> Result<()> {
                 )
                 .await;
             }
-            Command::Login {
-                legacy: _,
-                oauth,
-                device_auth,
-                devbox,
-            } => {
+            Command::Login(login_args) => {
                 init_tracing_simple("cli");
                 let _otel_guard = bcode_telemetry::otel_layer::otel_guard();
                 let config = bcode_shell::config::load_agent_config_disk_only()
                     .map_err(|e| anyhow::anyhow!("Failed to create agent config: {e}"))?;
-                bcode_shell::auth::run_cli_login(&config, oauth, device_auth, devbox).await?;
-                println!();
+                bcode_pager::login_cmd::run(&config, login_args).await?;
                 bcode_shell::instrumentation::finalize_and_exit(0);
             }
-            Command::Logout => {
+            Command::Logout(logout_args) => {
                 init_tracing_simple("cli");
                 let config = bcode_shell::config::load_agent_config_disk_only()
                     .map_err(|e| anyhow::anyhow!("Failed to create agent config: {e}"))?;
-                bcode_shell::auth::run_cli_logout(&config)?;
+                bcode_pager::login_cmd::run_logout(&config, logout_args)?;
                 bcode_shell::instrumentation::finalize_and_exit(0);
             }
             Command::Wrap(ref wrap_args) => {

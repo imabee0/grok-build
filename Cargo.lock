@@ -2064,6 +2064,7 @@ dependencies = [
  "bcode-hooks-plugins-types",
  "bcode-markdown",
  "bcode-mermaid",
+ "bcode-models",
  "bcode-pager-diff",
  "bcode-pager-pty-harness",
  "bcode-pager-render",
