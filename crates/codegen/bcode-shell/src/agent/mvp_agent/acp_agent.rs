@@ -403,7 +403,7 @@ impl acp::Agent for MvpAgent {
             tracing::info!(
                 label = ?login_label,
                 has_auth_provider,
-                "auth: advertising bcode.invalid auth method",
+                "auth: advertising provider-key/provider-setup auth method",
             );
         }
         let preferred_method = preferred_method_early;
@@ -415,6 +415,10 @@ impl acp::Agent for MvpAgent {
             Some(crate::auth::PreferredAuthMethod::ApiKey) => false,
             _ => has_cached_token,
         };
+        let has_provider_credential = crate::auth::provider_setup::any_model_has_credential(
+            self.models_manager.models().values(),
+            None,
+        );
         let built = auth_method::build_auth_methods(auth_method::AuthMethodsBuildInputs {
             has_external_api_key,
             has_cached_token,
@@ -422,6 +426,7 @@ impl acp::Agent for MvpAgent {
             enterprise_oidc_issuer: enterprise_oidc_issuer.as_deref(),
             login_label: login_label.as_deref(),
             has_auth_provider_command: has_auth_provider,
+            has_provider_credential,
             preferred_method,
         });
         let auth_methods = built.methods;
@@ -819,7 +824,7 @@ impl acp::Agent for MvpAgent {
                 self.spawn_post_auth_settings(auth_for_settings);
                 Ok(self.auth_response_with_meta())
             }
-            auth_method::BCODE_COM_METHOD_ID | auth_method::OIDC_METHOD_ID => {
+            auth_method::EXTERNAL_PROVIDER_METHOD_ID | auth_method::OIDC_METHOD_ID => {
                 let bcode_ctx = self.auth_manager.bcode_com_config();
                 let auth_meta = AuthRequestMeta::from_json(arguments.meta.as_ref());
                 tracing::info!(

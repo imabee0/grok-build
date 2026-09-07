@@ -942,23 +942,41 @@ mod tests {
     }
 
     #[test]
-    fn startup_auth_bcode_com_no_provider_needs_login_pending() {
-        let methods = vec![make_auth_method("bcode.invalid", "bcode.invalid", None)];
+    fn startup_auth_provider_setup_needs_login_pending() {
+        use bcode_shell::agent::auth_method::PROVIDER_SETUP_METHOD_ID;
+
+        let methods = vec![make_auth_method(
+            PROVIDER_SETUP_METHOD_ID,
+            "Add a provider",
+            None,
+        )];
         let (needs, label, method_id, mode) = startup_auth_metadata(&methods);
         assert!(needs);
-        assert_eq!(label.as_deref(), Some("bcode.invalid"));
-        assert_eq!(method_id.as_ref().unwrap().0.as_ref(), "bcode.invalid");
+        assert_eq!(label.as_deref(), Some("Add a provider"));
+        assert_eq!(
+            method_id.as_ref().unwrap().0.as_ref(),
+            PROVIDER_SETUP_METHOD_ID
+        );
         assert_eq!(mode, AuthStartMode::Pending);
     }
 
     #[test]
-    fn startup_auth_bcode_com_with_external_provider_command() {
+    fn startup_auth_external_provider_command_is_command_mode() {
+        use bcode_shell::agent::auth_method::EXTERNAL_PROVIDER_METHOD_ID;
+
         let meta = serde_json::json!({ "external_provider": true });
-        let methods = vec![make_auth_method("bcode.invalid", "Acme Corp", Some(meta))];
+        let methods = vec![make_auth_method(
+            EXTERNAL_PROVIDER_METHOD_ID,
+            "Acme Corp",
+            Some(meta),
+        )];
         let (needs, label, method_id, mode) = startup_auth_metadata(&methods);
         assert!(needs);
         assert_eq!(label.as_deref(), Some("Acme Corp"));
-        assert_eq!(method_id.as_ref().unwrap().0.as_ref(), "bcode.invalid");
+        assert_eq!(
+            method_id.as_ref().unwrap().0.as_ref(),
+            EXTERNAL_PROVIDER_METHOD_ID
+        );
         assert_eq!(mode, AuthStartMode::Command);
     }
 
@@ -994,12 +1012,13 @@ mod tests {
         let built = build_auth_methods(AuthMethodsBuildInputs {
             // Enterprise-style: model has `env_key` set and the env var resolves, so the shell-side predicate returns true
             has_external_api_key: true,
-            // Realistic enterprise user: no cached session token, default `bcode.invalid` login (no enterprise OIDC)
+            // Realistic enterprise user: no cached session token, default `provider.setup` login (no enterprise OIDC)
             has_cached_token: false,
             has_enterprise_oidc: false,
             enterprise_oidc_issuer: None,
             login_label: None,
             has_auth_provider_command: false,
+            has_provider_credential: false,
             preferred_method: None,
         });
 
@@ -1020,37 +1039,41 @@ mod tests {
     /// We assert this with `bcode.api_key` present LATER in the list (the shape of a past regression) and confirm the pager still requires login.
     /// The pager only inspects `auth_methods.first()`.
     /// This locks the failure mode of the regression.
-    /// If a refactor makes the pager scan past `.first()`, this test diverges from `startup_auth_bcode_com_no_provider_needs_login_pending` above.
+    /// If a refactor makes the pager scan past `.first()`, this test diverges from `startup_auth_provider_setup_needs_login_pending` above.
     /// It then either passes or fails on a meaningful new code path.
     #[test]
     fn startup_auth_bcode_api_key_not_first_still_requires_login() {
-        use bcode_shell::agent::auth_method::{BCODE_API_KEY_METHOD_ID, BCODE_COM_METHOD_ID};
+        use bcode_shell::agent::auth_method::{BCODE_API_KEY_METHOD_ID, PROVIDER_SETUP_METHOD_ID};
 
         let methods = vec![
-            make_auth_method(BCODE_COM_METHOD_ID, "Bcode", None),
+            make_auth_method(PROVIDER_SETUP_METHOD_ID, "Add a provider", None),
             make_auth_method(BCODE_API_KEY_METHOD_ID, "bcode.api_key", None),
         ];
         let (needs, _, _, _) = startup_auth_metadata(&methods);
         assert!(
             needs,
-            "with bcode.invalid first, the pager must require login -- pinning \
+            "with provider.setup first, the pager must require login -- pinning \
              the BAD-ordering failure mode (bcode.api_key not first)",
         );
     }
 
     #[test]
     fn startup_auth_method_id_is_copied_not_synthesized() {
-        let methods = vec![make_auth_method("bcode.invalid", "My Login", None)];
+        use bcode_shell::agent::auth_method::PROVIDER_SETUP_METHOD_ID;
+
+        let methods = vec![make_auth_method(PROVIDER_SETUP_METHOD_ID, "My Login", None)];
         let (_, _, method_id, _) = startup_auth_metadata(&methods);
         assert_eq!(&method_id.unwrap(), methods[0].id());
     }
 
     #[test]
     fn startup_auth_external_provider_false_is_pending() {
+        use bcode_shell::agent::auth_method::PROVIDER_SETUP_METHOD_ID;
+
         let meta = serde_json::json!({ "external_provider": false });
         let methods = vec![make_auth_method(
-            "bcode.invalid",
-            "bcode.invalid",
+            PROVIDER_SETUP_METHOD_ID,
+            "Add a provider",
             Some(meta),
         )];
         let (_, _, _, mode) = startup_auth_metadata(&methods);

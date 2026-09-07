@@ -581,14 +581,14 @@ fn login_with_empty_auth_methods_fails_closed() {
 }
 
 /// `/login` (and the 401 re-auth prompt, which routes through the same dispatcher) must not
-/// auto-open the dead `bcode.invalid` browser flow when nothing real is behind it: no enterprise
+/// auto-open a browser flow when nothing real is behind it: no enterprise
 /// OIDC, no external auth-provider command. Same gate as the startup check in `event_loop.rs`.
 #[test]
-fn login_with_only_dead_default_shows_provider_hint_instead_of_authenticating() {
+fn login_with_only_provider_setup_shows_provider_hint_instead_of_authenticating() {
     let mut app = test_app_with_agent();
     app.auth_methods = vec![acp::AuthMethod::Agent(acp::AuthMethodAgent::new(
-        acp::AuthMethodId::new(bcode_shell::agent::auth_method::BCODE_COM_METHOD_ID),
-        "Bcode".to_string(),
+        acp::AuthMethodId::new(bcode_shell::agent::auth_method::PROVIDER_SETUP_METHOD_ID),
+        "Add a provider".to_string(),
     ))];
     app.login_method_id = None;
     app.has_external_auth_provider = false;
@@ -610,15 +610,15 @@ fn login_with_only_dead_default_shows_provider_hint_instead_of_authenticating() 
     );
 }
 
-/// The same dead-default method is fine to authenticate against once a real external
+/// The same provider-setup method is fine to authenticate against once a real external
 /// auth-provider command is configured: `has_external_auth_provider` is the signal, not the
 /// method id alone.
 #[test]
-fn login_with_dead_default_but_external_provider_still_authenticates() {
+fn login_with_provider_setup_but_external_provider_still_authenticates() {
     let mut app = test_app_with_agent();
     app.auth_methods = vec![acp::AuthMethod::Agent(acp::AuthMethodAgent::new(
-        acp::AuthMethodId::new(bcode_shell::agent::auth_method::BCODE_COM_METHOD_ID),
-        "Bcode".to_string(),
+        acp::AuthMethodId::new(bcode_shell::agent::auth_method::PROVIDER_SETUP_METHOD_ID),
+        "Add a provider".to_string(),
     ))];
     app.login_method_id = None;
     app.has_external_auth_provider = true;
@@ -627,7 +627,7 @@ fn login_with_dead_default_but_external_provider_still_authenticates() {
 
     assert!(
         !effects.is_empty(),
-        "an external auth provider makes bcode.invalid reachable again -- must authenticate"
+        "an external auth provider makes the advertised method reachable again -- must authenticate"
     );
     assert!(matches!(app.auth_state, AuthState::Authenticating { .. }));
 }

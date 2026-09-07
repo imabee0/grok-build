@@ -225,14 +225,13 @@ pub(super) fn dispatch_login(app: &mut AppView) -> Vec<Effect> {
     };
 
     if bcode_shell::agent::auth_method::AuthMethodKind::from_id(&method_id)
-        == bcode_shell::agent::auth_method::AuthMethodKind::BcodeCom
+        == bcode_shell::agent::auth_method::AuthMethodKind::ProviderSetup
         && !app.has_external_auth_provider
     {
-        // The only advertised interactive method is the built-in bcode.invalid
-        // backend, with no enterprise OIDC and no external auth-provider
-        // command configured -- nothing real to sign in to. Same gate as the
-        // startup check in `event_loop.rs`; `/login` and the 401 re-auth
-        // prompt both land here mid-session.
+        // Nothing resolves anywhere and there's no enterprise OIDC / external
+        // auth-provider command configured -- bcode has no backend of its own
+        // to sign in to. Same gate as the startup check in `event_loop.rs`;
+        // `/login` and the 401 re-auth prompt both land here mid-session.
         app.auth_state = AuthState::Pending {
             error: Some(crate::app::event_loop::provider_sign_in_hint()),
         };

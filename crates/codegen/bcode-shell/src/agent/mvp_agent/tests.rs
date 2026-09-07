@@ -2857,7 +2857,7 @@ fn on_demand_enabled_from_remote_settings() {
 async fn auth_type_session_based_no_current_returns_session_token() {
     for method_id in [
         crate::agent::auth_method::CACHED_TOKEN_AUTH_METHOD_ID,
-        crate::agent::auth_method::BCODE_COM_METHOD_ID,
+        crate::agent::auth_method::EXTERNAL_PROVIDER_METHOD_ID,
         crate::agent::auth_method::OIDC_METHOD_ID,
     ] {
         let agent = build_minimal_agent_for_tests();
@@ -2931,9 +2931,10 @@ async fn auth_type_no_method_id_with_current_returns_session_token() {
     assert_eq!(agent.auth_type(), bcode_chat_state::AuthType::SessionToken,);
 }
 /// Minimal agent whose `bcode_com_config` engages the api-key kill switch (`disable_api_key_auth = true`), mirroring a forced-IdP deployment.
-fn build_agent_with_api_key_auth_disabled() -> MvpAgent {
+/// `with_oidc` additionally configures enterprise OIDC, mirroring a real forced-IdP deployment that has something to fall through to.
+fn build_agent_with_api_key_auth_disabled(with_oidc: bool) -> MvpAgent {
     use crate::agent::config::Config as AgentConfig;
-    use crate::auth::{AuthManager, BcodeComConfig};
+    use crate::auth::{AuthManager, BcodeComConfig, OidcAuthConfig};
     let temp_dir = tempfile::tempdir().unwrap();
     let auth_manager =
         std::sync::Arc::new(AuthManager::new(temp_dir.path(), BcodeComConfig::default()));
@@ -2941,6 +2942,14 @@ fn build_agent_with_api_key_auth_disabled() -> MvpAgent {
     let gateway = GatewaySender::new(tx);
     let mut cfg = AgentConfig::default();
     cfg.bcode_com_config.disable_api_key_auth = Some(true);
+    if with_oidc {
+        cfg.bcode_com_config.oidc = Some(OidcAuthConfig {
+            issuer: "https://sso.example.com".to_string(),
+            client_id: "test-client".to_string(),
+            scopes: vec!["openid".to_string()],
+            audience: None,
+        });
+    }
     MvpAgent::new(gateway, &cfg, auth_manager, None).expect("valid test config")
 }
 /// Deployment-key / managed-config user: `BCODE_API_KEY` resolves and the kill switch is off.
@@ -2964,46 +2973,62 @@ async fn cached_token_fallthrough_prefers_api_key_for_deployment_key() {
          through to bcode.api_key on a dead cached_token -- not interactive login",
     );
 }
-/// Forced-IdP deployment: even with `BCODE_API_KEY` present, the admin kill switch keeps the fallthrough on interactive `bcode.invalid`.
-/// Api-key auth is neither advertised nor an eligible fallthrough.
+/// Forced-IdP deployment with no enterprise OIDC configured either: even with
+/// `BCODE_API_KEY` present, the admin kill switch keeps api-key auth from
+/// being an eligible fallthrough -- and bcode has no login of its own, so
+/// there is nothing left to fall through to.
 #[tokio::test(flavor = "current_thread")]
 #[serial_test::serial]
 async fn cached_token_fallthrough_respects_kill_switch() {
-    use crate::agent::auth_method::{BCODE_COM_METHOD_ID, BCODE_API_KEY_ENV_VAR};
+    use crate::agent::auth_method::BCODE_API_KEY_ENV_VAR;
     use bcode_test_support::EnvGuard;
     let _lockdown = EnvGuard::unset("BCODE_DISABLE_API_KEY_AUTH");
     let _key = EnvGuard::set(BCODE_API_KEY_ENV_VAR, "test-deployment-key");
-    let agent = build_agent_with_api_key_auth_disabled();
+    let agent = build_agent_with_api_key_auth_disabled(false);
+    assert_eq!(
+        agent.cached_token_fallthrough_method_id(),
+        None,
+        "disable_api_key_auth with no enterprise oidc configured has nothing \
+         to fall through to -- BCODE_API_KEY must not bypass the kill switch",
+    );
+}
+/// The same forced-IdP deployment, but with enterprise OIDC actually
+/// configured: the fallthrough must land on `oidc`, not silently disappear.
+#[tokio::test(flavor = "current_thread")]
+#[serial_test::serial]
+async fn cached_token_fallthrough_falls_to_oidc_under_kill_switch() {
+    use crate::agent::auth_method::{BCODE_API_KEY_ENV_VAR, OIDC_METHOD_ID};
+    use bcode_test_support::EnvGuard;
+    let _lockdown = EnvGuard::unset("BCODE_DISABLE_API_KEY_AUTH");
+    let _key = EnvGuard::set(BCODE_API_KEY_ENV_VAR, "test-deployment-key");
+    let agent = build_agent_with_api_key_auth_disabled(true);
     assert_eq!(
         agent
             .cached_token_fallthrough_method_id()
             .as_ref()
             .map(|id| id.0.as_ref()),
-        Some(BCODE_COM_METHOD_ID),
+        Some(OIDC_METHOD_ID),
         "disable_api_key_auth must keep the cached_token fallthrough on \
-         interactive bcode.invalid so BCODE_API_KEY can't bypass forced IdP login",
+         interactive oidc so BCODE_API_KEY can't bypass forced IdP login",
     );
 }
-/// No advertiseable credentials at all (no env key, no kill switch): the user genuinely needs to log in.
-/// The fallthrough is interactive `bcode.invalid`.
+/// No advertiseable credentials at all (no env key, no kill switch, no
+/// enterprise oidc, no auth_provider_command): bcode has no login of its own,
+/// so there is genuinely nothing to fall through to.
 #[tokio::test(flavor = "current_thread")]
 #[serial_test::serial]
-async fn cached_token_fallthrough_falls_to_bcode_com_without_credentials() {
-    use crate::agent::auth_method::{
-        BCODE_COM_METHOD_ID, LEGACY_BCODE_API_KEY_ENV_VAR, BCODE_API_KEY_ENV_VAR,
-    };
+async fn cached_token_fallthrough_is_none_without_any_real_login() {
+    use crate::agent::auth_method::{LEGACY_BCODE_API_KEY_ENV_VAR, BCODE_API_KEY_ENV_VAR};
     use bcode_test_support::EnvGuard;
     let _lockdown = EnvGuard::unset("BCODE_DISABLE_API_KEY_AUTH");
     let _new = EnvGuard::unset(BCODE_API_KEY_ENV_VAR);
     let _legacy = EnvGuard::unset(LEGACY_BCODE_API_KEY_ENV_VAR);
     let agent = build_minimal_agent_for_tests();
     assert_eq!(
-        agent
-            .cached_token_fallthrough_method_id()
-            .as_ref()
-            .map(|id| id.0.as_ref()),
-        Some(BCODE_COM_METHOD_ID),
-        "no API-key creds and no kill switch -> interactive bcode.invalid login",
+        agent.cached_token_fallthrough_method_id(),
+        None,
+        "no API-key creds, no kill switch, and no configured interactive \
+         login -- bcode has no login of its own to fall through to",
     );
 }
 /// Verifies the 4-state matrix of `(disable_zdr_incompatible_tools, zdr_video_output_s3)`:

@@ -127,10 +127,18 @@ pub struct AuthMethodsBuildInputs<'a> {
     pub has_enterprise_oidc: bool,
     /// Required when `has_enterprise_oidc` is true; ignored otherwise.
     pub enterprise_oidc_issuer: Option<&'a str>,
-    /// Optional display label for the login method (`bcode.invalid` or `oidc`).
+    /// Optional display label for the login method (`auth_provider` or `oidc`).
     pub login_label: Option<&'a str>,
-    /// True if `bcode_com_config.auth_provider_command` is configured (sets `meta.external_provider = true` on the `bcode.invalid` method).
+    /// True if `bcode_com_config.auth_provider_command` is configured (advertised as `auth_provider`, `meta.external_provider = true`).
     pub has_auth_provider_command: bool,
+    /// True if a credential resolves for at least one catalog model right now
+    /// ([`crate::auth::provider_setup::any_model_has_credential`]). Independent of
+    /// `has_external_api_key`: this also sees the provider-wide `bcode login` tier,
+    /// a named account, and an auth-provider's actually-minted token, not just what's
+    /// statically attached to a model. Decides between advertising `provider.setup`
+    /// (nothing resolves, client opens the provider manager) and `provider.key`
+    /// (something already resolves, non-interactive).
+    pub has_provider_credential: bool,
     /// Config pin (`[auth] preferred_method`).
     /// `None` keeps multi-method fallthrough; `Some` is fail-closed (only that method family).
     pub preferred_method: Option<PreferredAuthMethod>,
@@ -157,8 +165,10 @@ pub struct BuiltAuthMethods {
 /// 1. `bcode.api_key`     (if `has_external_api_key`)
 /// 2. `cached_token`    (if `has_cached_token`)
 /// 3. exactly one of:
-///    - `oidc`          (if `has_enterprise_oidc`)
-///    - `bcode.invalid`      (otherwise)
+///    - `oidc`             (if `has_enterprise_oidc`)
+///    - `auth_provider`    (else if `has_auth_provider_command`)
+///    - `provider.setup`   (else if nothing resolves anywhere)
+///    - `provider.key`     (otherwise -- non-interactive, something already resolves)
 ///
 /// Unpinned `default_auth_method_id`:
 /// - `cached_token` if `has_cached_token`
@@ -177,6 +187,7 @@ pub fn build_auth_methods(inputs: AuthMethodsBuildInputs<'_>) -> BuiltAuthMethod
         enterprise_oidc_issuer,
         login_label,
         has_auth_provider_command,
+        has_provider_credential,
         preferred_method,
     } = inputs;
 
@@ -188,6 +199,7 @@ pub fn build_auth_methods(inputs: AuthMethodsBuildInputs<'_>) -> BuiltAuthMethod
             enterprise_oidc_issuer,
             login_label,
             has_auth_provider_command,
+            has_provider_credential,
         ),
         None => build_unpinned(
             has_external_api_key,
@@ -196,6 +208,7 @@ pub fn build_auth_methods(inputs: AuthMethodsBuildInputs<'_>) -> BuiltAuthMethod
             enterprise_oidc_issuer,
             login_label,
             has_auth_provider_command,
+            has_provider_credential,
         ),
     }
 }
@@ -224,6 +237,7 @@ fn build_pinned_oidc(
     enterprise_oidc_issuer: Option<&str>,
     login_label: Option<&str>,
     has_auth_provider_command: bool,
+    has_provider_credential: bool,
 ) -> BuiltAuthMethods {
     let mut methods: Vec<acp::AuthMethod> = Vec::new();
     let mut default_auth_method_id: Option<acp::AuthMethodId> = None;
@@ -239,6 +253,7 @@ fn build_pinned_oidc(
         enterprise_oidc_issuer,
         login_label,
         has_auth_provider_command,
+        has_provider_credential,
     );
 
     BuiltAuthMethods {
@@ -254,6 +269,7 @@ fn build_unpinned(
     enterprise_oidc_issuer: Option<&str>,
     login_label: Option<&str>,
     has_auth_provider_command: bool,
+    has_provider_credential: bool,
 ) -> BuiltAuthMethods {
     let mut methods: Vec<acp::AuthMethod> = Vec::new();
     let mut default_auth_method_id: Option<acp::AuthMethodId> = None;
@@ -286,6 +302,7 @@ fn build_unpinned(
         enterprise_oidc_issuer,
         login_label,
         has_auth_provider_command,
+        has_provider_credential,
     );
 
     BuiltAuthMethods {
@@ -294,12 +311,18 @@ fn build_unpinned(
     }
 }
 
+/// Push exactly one method onto the tail of the list: enterprise OIDC, else a
+/// configured external auth-provider command, else -- bcode has no backend of
+/// its own -- `provider.setup` when nothing resolves anywhere, else the
+/// non-interactive `provider.key` marker so the list is never empty for a
+/// user who is already fully set up.
 fn push_interactive_login(
     methods: &mut Vec<acp::AuthMethod>,
     has_enterprise_oidc: bool,
     enterprise_oidc_issuer: Option<&str>,
     login_label: Option<&str>,
     has_auth_provider_command: bool,
+    has_provider_credential: bool,
 ) {
     if has_enterprise_oidc {
         // Caller invariant: `enterprise_oidc_issuer` MUST be `Some(...)` when `has_enterprise_oidc` is true
@@ -308,11 +331,12 @@ fn push_interactive_login(
         let issuer = enterprise_oidc_issuer
             .expect("enterprise_oidc_issuer is required when has_enterprise_oidc is true");
         methods.push(oidc_auth_method(issuer, login_label));
+    } else if has_auth_provider_command {
+        methods.push(external_provider_auth_method(login_label));
+    } else if !has_provider_credential {
+        methods.push(provider_setup_auth_method());
     } else {
-        methods.push(bcode_com_auth_method(
-            login_label,
-            has_auth_provider_command,
-        ));
+        methods.push(provider_key_auth_method());
     }
 }
 
@@ -321,7 +345,15 @@ fn push_interactive_login(
 pub enum AuthMethodKind {
     BcodeApiKey,
     CachedToken,
-    BcodeCom,
+    /// A credential already resolves for at least one catalog model
+    /// (provider-wide, named account, or an auth-provider's minted token).
+    /// Non-interactive: nothing to authenticate, resolution happens per turn.
+    ProviderKey,
+    /// Nothing resolves anywhere. bcode has no account of its own -- the
+    /// client opens its provider-setup surface to add one.
+    ProviderSetup,
+    /// `[bcode_com_config] auth_provider_command` mints the credential.
+    ExternalProvider,
     Oidc,
     Unknown,
 }
@@ -331,7 +363,9 @@ impl AuthMethodKind {
         match id.0.as_ref() {
             BCODE_API_KEY_METHOD_ID => Self::BcodeApiKey,
             CACHED_TOKEN_AUTH_METHOD_ID => Self::CachedToken,
-            BCODE_COM_METHOD_ID => Self::BcodeCom,
+            PROVIDER_KEY_METHOD_ID => Self::ProviderKey,
+            PROVIDER_SETUP_METHOD_ID => Self::ProviderSetup,
+            EXTERNAL_PROVIDER_METHOD_ID => Self::ExternalProvider,
             OIDC_METHOD_ID => Self::Oidc,
             _ => Self::Unknown,
         }
@@ -342,18 +376,29 @@ impl AuthMethodKind {
         matches!(self, Self::BcodeApiKey)
     }
 
-    /// `true` for session-based methods (cached_token, bcode.invalid, oidc).
+    /// `true` for methods backed by a minted, refreshable token (cached_token,
+    /// an external auth-provider command, oidc). `ProviderKey`/`ProviderSetup`
+    /// are not: a provider API key never expires this way, and resolution
+    /// happens fresh per turn with nothing to refresh.
     pub(crate) fn is_session_based(self) -> bool {
-        matches!(self, Self::CachedToken | Self::BcodeCom | Self::Oidc)
+        matches!(
+            self,
+            Self::CachedToken | Self::Oidc | Self::ExternalProvider
+        )
     }
 
-    /// Requires user interaction (browser, OIDC redirect, or external auth command).
+    /// Requires user interaction (browser, OIDC redirect, external auth
+    /// command, or the client's own provider-setup surface).
     pub fn needs_interactive_login(self) -> bool {
-        matches!(self, Self::BcodeCom | Self::Oidc)
+        matches!(
+            self,
+            Self::Oidc | Self::ExternalProvider | Self::ProviderSetup
+        )
     }
 }
 
-/// `true` for session-based ACP methods (cached_token, bcode.invalid, oidc).
+/// `true` for session-based ACP methods (cached_token, an external
+/// auth-provider command, oidc).
 pub(crate) fn is_session_based_method(method_id: &acp::AuthMethodId) -> bool {
     AuthMethodKind::from_id(method_id).is_session_based()
 }
@@ -412,21 +457,29 @@ pub const AUTH_ERROR_API_KEY: &str = "Authentication failed. Run `bcode login`, 
 
 /// Next ACP method id when `cached_token` cannot proceed (missing / expired / legacy WebLogin), or `None` when fallthrough is forbidden.
 ///
-/// Unpinned: prefer non-interactive `bcode.api_key` when advertiseable, else interactive `bcode.invalid`.
+/// Unpinned: prefer non-interactive `bcode.api_key` when advertiseable, else
+/// `interactive_method` -- the caller's real login destination (enterprise
+/// `oidc`, or `auth_provider` when a command is configured), or `None` when
+/// neither is configured. bcode has no login of its own to fall back to, so
+/// a fresh user with nothing configured gets `None` (fail auth cleanly)
+/// rather than a method id nothing can service.
 ///
 /// Pinned `oidc`: **no** fallthrough to api_key; return `None` so the caller fails auth.
 /// Pinned `api_key` should not reach this path (cached_token is not advertised).
 pub(crate) fn method_id_after_cached_token_unavailable(
     has_external_api_key: bool,
     preferred_method: Option<PreferredAuthMethod>,
+    interactive_method: Option<&'static str>,
 ) -> Option<&'static str> {
     match preferred_method {
         Some(PreferredAuthMethod::Oidc) | Some(PreferredAuthMethod::ApiKey) => None,
-        None => Some(if has_external_api_key {
-            BCODE_API_KEY_METHOD_ID
-        } else {
-            BCODE_COM_METHOD_ID
-        }),
+        None => {
+            if has_external_api_key {
+                Some(BCODE_API_KEY_METHOD_ID)
+            } else {
+                interactive_method
+            }
+        }
     }
 }
 
@@ -461,28 +514,59 @@ pub(crate) fn cached_token_auth_method() -> acp::AuthMethod {
     )
 }
 
-pub const BCODE_COM_METHOD_ID: &str = "bcode.invalid";
+pub const PROVIDER_KEY_METHOD_ID: &str = "provider.key";
 
-/// bcode OAuth2/OIDC auth. Method id `"bcode.invalid"` kept for ACP wire compatibility.
-pub(crate) fn bcode_com_auth_method(
-    label: Option<&str>,
-    has_auth_provider_command: bool,
-) -> acp::AuthMethod {
-    let name = label.unwrap_or("Bcode");
-    let meta = if has_auth_provider_command {
-        let mut m = acp::Meta::new();
-        m.insert("external_provider".to_owned(), serde_json::json!(true));
-        Some(m)
-    } else {
-        None
-    };
+/// A credential already resolves for at least one catalog model. Non-interactive:
+/// `resolve_credentials` reads it fresh per turn, so there is nothing to
+/// authenticate and no browser/redirect ever opens for this method.
+pub(crate) fn provider_key_auth_method() -> acp::AuthMethod {
     acp::AuthMethod::Agent(
         acp::AuthMethodAgent::new(
-            acp::AuthMethodId::new(BCODE_COM_METHOD_ID),
+            acp::AuthMethodId::new(PROVIDER_KEY_METHOD_ID),
+            "Provider credential".to_string(),
+        )
+        .description(Some(
+            "A model provider credential is already configured".to_string(),
+        )),
+    )
+}
+
+pub const PROVIDER_SETUP_METHOD_ID: &str = "provider.setup";
+
+/// No credential resolves anywhere. bcode has no account of its own -- the
+/// client is expected to open its provider-setup surface (a picker over the
+/// model catalog's providers) rather than open a browser at a login this
+/// build has no backend for.
+pub(crate) fn provider_setup_auth_method() -> acp::AuthMethod {
+    acp::AuthMethod::Agent(
+        acp::AuthMethodAgent::new(
+            acp::AuthMethodId::new(PROVIDER_SETUP_METHOD_ID),
+            "Sign in to a provider".to_string(),
+        )
+        .description(Some(
+            "Choose a model provider and add its API key".to_string(),
+        )),
+    )
+}
+
+pub const EXTERNAL_PROVIDER_METHOD_ID: &str = "auth_provider";
+
+/// `[bcode_com_config] auth_provider_command` mints the credential: an
+/// operator-supplied binary that owns its own sign-in flow. Runs through the
+/// same interactive-auth machinery as `oidc`; `meta.external_provider = true`
+/// is how the pager tells this apart from a login it can auto-open a browser
+/// for.
+pub(crate) fn external_provider_auth_method(label: Option<&str>) -> acp::AuthMethod {
+    let name = label.unwrap_or("External provider");
+    let mut m = acp::Meta::new();
+    m.insert("external_provider".to_owned(), serde_json::json!(true));
+    acp::AuthMethod::Agent(
+        acp::AuthMethodAgent::new(
+            acp::AuthMethodId::new(EXTERNAL_PROVIDER_METHOD_ID),
             name.to_string(),
         )
         .description(Some(format!("Sign in with {name}")))
-        .meta(meta),
+        .meta(Some(m)),
     )
 }
 
@@ -511,17 +595,38 @@ mod tests {
     #[test]
     fn after_cached_token_unavailable_prefers_api_key_when_advertiseable() {
         assert_eq!(
-            method_id_after_cached_token_unavailable(true, None),
+            method_id_after_cached_token_unavailable(true, None, Some(OIDC_METHOD_ID)),
             Some(BCODE_API_KEY_METHOD_ID),
         );
     }
 
-    /// With no advertiseable API-key credentials, fall to interactive `bcode.invalid`.
+    /// With no advertiseable API-key credentials, fall to the real interactive
+    /// login the caller found (enterprise oidc, here).
     #[test]
-    fn after_cached_token_unavailable_falls_to_bcode_com_without_api_key() {
+    fn after_cached_token_unavailable_falls_to_the_real_interactive_method() {
         assert_eq!(
-            method_id_after_cached_token_unavailable(false, None),
-            Some(BCODE_COM_METHOD_ID),
+            method_id_after_cached_token_unavailable(false, None, Some(OIDC_METHOD_ID)),
+            Some(OIDC_METHOD_ID),
+        );
+        assert_eq!(
+            method_id_after_cached_token_unavailable(
+                false,
+                None,
+                Some(EXTERNAL_PROVIDER_METHOD_ID)
+            ),
+            Some(EXTERNAL_PROVIDER_METHOD_ID),
+        );
+    }
+
+    /// A fresh user with no BYOK and no configured interactive login (no
+    /// enterprise oidc, no auth_provider_command) has nothing to fall through
+    /// to at all -- bcode has no login of its own, so the caller must fail
+    /// auth cleanly rather than name a method nothing can service.
+    #[test]
+    fn after_cached_token_unavailable_is_none_with_nothing_configured() {
+        assert_eq!(
+            method_id_after_cached_token_unavailable(false, None, None),
+            None,
         );
     }
 
@@ -529,11 +634,19 @@ mod tests {
     #[test]
     fn after_cached_token_unavailable_fails_closed_when_pinned() {
         assert_eq!(
-            method_id_after_cached_token_unavailable(true, Some(PreferredAuthMethod::Oidc)),
+            method_id_after_cached_token_unavailable(
+                true,
+                Some(PreferredAuthMethod::Oidc),
+                Some(OIDC_METHOD_ID)
+            ),
             None,
         );
         assert_eq!(
-            method_id_after_cached_token_unavailable(true, Some(PreferredAuthMethod::ApiKey)),
+            method_id_after_cached_token_unavailable(
+                true,
+                Some(PreferredAuthMethod::ApiKey),
+                Some(OIDC_METHOD_ID)
+            ),
             None,
         );
     }
@@ -543,7 +656,7 @@ mod tests {
     fn auth_method_kind_classifier_matrix() {
         let session_methods = [
             CACHED_TOKEN_AUTH_METHOD_ID,
-            BCODE_COM_METHOD_ID,
+            EXTERNAL_PROVIDER_METHOD_ID,
             OIDC_METHOD_ID,
         ];
         for method_id in session_methods {
@@ -566,6 +679,19 @@ mod tests {
         assert!(!is_session_based_method(&acp::AuthMethodId::new(
             "unknown-method"
         )));
+
+        // provider.key: something already resolves, non-interactive, not session-based.
+        let key_id = acp::AuthMethodId::new(PROVIDER_KEY_METHOD_ID);
+        let key_kind = AuthMethodKind::from_id(&key_id);
+        assert!(!key_kind.is_session_based());
+        assert!(!key_kind.needs_interactive_login());
+
+        // provider.setup: nothing resolves, interactive (opens the client's
+        // provider manager), but not session-based -- there is no token to refresh.
+        let setup_id = acp::AuthMethodId::new(PROVIDER_SETUP_METHOD_ID);
+        let setup_kind = AuthMethodKind::from_id(&setup_id);
+        assert!(!setup_kind.is_session_based());
+        assert!(setup_kind.needs_interactive_login());
     }
 
     /// A minimal `ModelEntry` for tests in this module that only need to vary
@@ -690,6 +816,7 @@ mod tests {
             enterprise_oidc_issuer: None,
             login_label: None,
             has_auth_provider_command: false,
+            has_provider_credential: false,
             preferred_method: None,
         }
     }
@@ -801,26 +928,53 @@ mod tests {
         );
     }
 
-    /// Brand-new user (no API key, no cached token): only `bcode.invalid` is advertised, and the pager will (correctly) show the login screen.
-    /// `default_auth_method_id` is None so the pager falls back to the advertised login method.
+    /// Brand-new user (no API key, no cached token, no provider credential
+    /// anywhere): only `provider.setup` is advertised, and the client will
+    /// (correctly) open its provider-setup surface. `default_auth_method_id`
+    /// is None so the pager falls back to the advertised login method.
     #[test]
-    fn fresh_user_only_advertises_bcode_com_and_requires_login() {
+    fn fresh_user_advertises_provider_setup_and_requires_login() {
         let built = build_auth_methods(default_inputs());
 
-        assert_eq!(first_kind(&built.methods), Some(AuthMethodKind::BcodeCom));
+        assert_eq!(
+            first_kind(&built.methods),
+            Some(AuthMethodKind::ProviderSetup)
+        );
         assert!(built.default_auth_method_id.is_none());
         assert_eq!(built.methods.len(), 1);
+        assert!(AuthMethodKind::from_id(built.methods[0].id()).needs_interactive_login());
     }
 
-    /// Enterprise OIDC replaces `bcode.invalid` (mutually exclusive).
-    /// bcode.api_key, when present, still leads.
+    /// The regression this predicate exists for: `bcode login <provider>`
+    /// resolves a real credential (`has_provider_credential`), so the login
+    /// screen must not reappear -- `provider.key`, non-interactive, leads.
     #[test]
-    fn enterprise_oidc_replaces_bcode_com_but_bcode_api_key_still_first() {
+    fn provider_credential_skips_the_login_screen() {
+        let inputs = AuthMethodsBuildInputs {
+            has_provider_credential: true,
+            ..default_inputs()
+        };
+        let built = build_auth_methods(inputs);
+
+        assert_eq!(
+            first_kind(&built.methods),
+            Some(AuthMethodKind::ProviderKey)
+        );
+        assert_eq!(built.methods.len(), 1);
+        assert!(!AuthMethodKind::from_id(built.methods[0].id()).needs_interactive_login());
+    }
+
+    /// Enterprise OIDC leads over `provider.setup` even when nothing else
+    /// resolves -- an IdP-backed deployment is never told to sign in to a
+    /// provider instead of its own SSO.
+    #[test]
+    fn enterprise_oidc_still_leads_over_provider_setup() {
         let inputs = AuthMethodsBuildInputs {
             has_external_api_key: true,
             has_cached_token: false,
             has_enterprise_oidc: true,
             enterprise_oidc_issuer: Some("https://sso.example.com"),
+            has_provider_credential: false,
             ..default_inputs()
         };
         let built = build_auth_methods(inputs);
@@ -840,15 +994,16 @@ mod tests {
             !built
                 .methods
                 .iter()
-                .any(|m| AuthMethodKind::from_id(m.id()) == AuthMethodKind::BcodeCom),
-            "bcode.invalid and oidc are mutually exclusive",
+                .any(|m| AuthMethodKind::from_id(m.id()) == AuthMethodKind::ProviderSetup),
+            "oidc and provider.setup are mutually exclusive",
         );
     }
 
-    /// `has_auth_provider_command` reaches the `bcode.invalid` method as `meta.external_provider = true`.
-    /// Pinned here so the pager's `AuthStartMode::Command` path keeps working.
+    /// `has_auth_provider_command` advertises `auth_provider` (not
+    /// `provider.setup`) with `meta.external_provider = true`. Pinned here so
+    /// the pager's `AuthStartMode::Command` path keeps working.
     #[test]
-    fn auth_provider_command_sets_external_provider_meta() {
+    fn auth_provider_command_advertises_external_provider_with_meta() {
         let inputs = AuthMethodsBuildInputs {
             has_auth_provider_command: true,
             login_label: Some("Acme Corp"),
@@ -856,16 +1011,24 @@ mod tests {
         };
         let built = build_auth_methods(inputs);
 
-        let bcode = built
+        let method = built
             .methods
             .iter()
-            .find(|m| AuthMethodKind::from_id(m.id()) == AuthMethodKind::BcodeCom)
-            .expect("bcode.invalid must be advertised");
-        assert_eq!(bcode.name(), "Acme Corp");
-        let meta = bcode.meta().expect("meta should be set");
+            .find(|m| AuthMethodKind::from_id(m.id()) == AuthMethodKind::ExternalProvider)
+            .expect("auth_provider must be advertised");
+        assert_eq!(method.name(), "Acme Corp");
+        assert!(AuthMethodKind::from_id(method.id()).needs_interactive_login());
+        let meta = method.meta().expect("meta should be set");
         assert_eq!(
             meta.get("external_provider").and_then(|v| v.as_bool()),
             Some(true),
+        );
+        assert!(
+            !built
+                .methods
+                .iter()
+                .any(|m| AuthMethodKind::from_id(m.id()) == AuthMethodKind::ProviderSetup),
+            "auth_provider and provider.setup are mutually exclusive",
         );
     }
 
@@ -1001,7 +1164,7 @@ mod tests {
         );
         assert_eq!(
             first_kind(&built.methods),
-            Some(AuthMethodKind::BcodeCom),
+            Some(AuthMethodKind::ProviderSetup),
             "with api-key auth disabled and no cached token, the login method \
              must lead so the pager requires interactive login",
         );
@@ -1027,7 +1190,10 @@ mod tests {
             has_external_api_key: false,
             ..default_inputs()
         });
-        assert_eq!(first_kind(&built.methods), Some(AuthMethodKind::BcodeCom));
+        assert_eq!(
+            first_kind(&built.methods),
+            Some(AuthMethodKind::ProviderSetup)
+        );
     }
 
     #[test]
@@ -1207,8 +1373,8 @@ mod tests {
         });
         assert_eq!(
             first_kind(&built.methods),
-            Some(AuthMethodKind::BcodeCom),
-            "no cached token AND no api key: pager must show login (bcode.invalid first)",
+            Some(AuthMethodKind::ProviderSetup),
+            "no cached token AND no api key: pager must show login (provider.setup first)",
         );
     }
 
@@ -1248,7 +1414,7 @@ mod tests {
         });
         assert_eq!(
             method_ids(&built),
-            vec![CACHED_TOKEN_AUTH_METHOD_ID, BCODE_COM_METHOD_ID]
+            vec![CACHED_TOKEN_AUTH_METHOD_ID, PROVIDER_SETUP_METHOD_ID]
         );
         assert_eq!(default_id(&built), Some(CACHED_TOKEN_AUTH_METHOD_ID));
     }
@@ -1261,7 +1427,7 @@ mod tests {
             preferred_method: Some(PreferredAuthMethod::Oidc),
             ..default_inputs()
         });
-        assert_eq!(method_ids(&built), vec![BCODE_COM_METHOD_ID]);
+        assert_eq!(method_ids(&built), vec![PROVIDER_SETUP_METHOD_ID]);
         assert!(built.default_auth_method_id.is_none());
     }
 }

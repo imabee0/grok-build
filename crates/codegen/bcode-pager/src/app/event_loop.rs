@@ -1311,12 +1311,12 @@ pub(crate) async fn run(
                 crate::acp::AuthStartMode::Command => super::app_view::AuthMode::Command,
             };
         } else {
-            // --force-login: find the bcode.invalid method from the advertised list
-            let bcode_com = connection
-                .auth_methods
-                .iter()
-                .find(|m| m.id().0.as_ref() == "bcode.invalid");
-            if let Some(method) = bcode_com {
+            // --force-login: find an interactive login method from the advertised list
+            let interactive = connection.auth_methods.iter().find(|m| {
+                bcode_shell::agent::auth_method::AuthMethodKind::from_id(m.id())
+                    .needs_interactive_login()
+            });
+            if let Some(method) = interactive {
                 app.login_label = Some(method.name().to_string());
                 app.login_method_id = Some(method.id().clone());
                 let is_provider = method
@@ -1331,7 +1331,7 @@ pub(crate) async fn run(
                     super::app_view::AuthMode::Pending
                 };
             } else {
-                // No bcode.invalid method available, use the first method as fallback
+                // No interactive method available, use the first method as fallback
                 let first = &connection.auth_methods[0];
                 app.login_label = Some(first.name().to_string());
                 app.login_method_id = Some(first.id().clone());
@@ -1361,14 +1361,14 @@ pub(crate) async fn run(
             vec![]
         } else if app.login_method_id.as_ref().is_some_and(|id| {
             bcode_shell::agent::auth_method::AuthMethodKind::from_id(id)
-                == bcode_shell::agent::auth_method::AuthMethodKind::BcodeCom
+                == bcode_shell::agent::auth_method::AuthMethodKind::ProviderSetup
         }) && !crate::slash::commands::usage::detect_external_auth_provider(
             &connection.auth_methods,
         ) {
-            // The only advertised interactive method is the built-in bcode.invalid
-            // backend, with no enterprise OIDC and no external auth-provider
-            // command configured -- nothing real to sign in to. Auto-opening a
-            // browser here would open a tab at a host that cannot resolve.
+            // Nothing resolves anywhere, with no enterprise OIDC and no
+            // external auth-provider command configured -- bcode has no
+            // backend of its own to sign in to. Auto-opening a browser here
+            // would open a tab at a host that cannot resolve.
             // Show the provider list instead of hanging on "waiting for login".
             app.auth_state = super::app_view::AuthState::Pending {
                 error: Some(provider_sign_in_hint()),

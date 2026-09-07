@@ -1326,8 +1326,23 @@ impl MvpAgent {
             bcode_chat_state::AuthType::ApiKey
         }
     }
-    /// Fall through to `bcode.api_key` if the startup probe still allows it, else `bcode.invalid`.
-    /// `None` when `preferred_method` is pinned.
+    /// The real interactive login to fall through to when nothing else is
+    /// advertiseable: enterprise `oidc`, else a configured `auth_provider`
+    /// command, else `None` -- bcode has no login of its own, so a fresh user
+    /// with neither configured gets nothing to fall through to.
+    fn interactive_fallthrough_method(&self) -> Option<&'static str> {
+        let cfg = self.cfg.borrow();
+        if cfg.bcode_com_config.oidc.is_some() {
+            Some(auth_method::OIDC_METHOD_ID)
+        } else if cfg.bcode_com_config.auth_provider_command.is_some() {
+            Some(auth_method::EXTERNAL_PROVIDER_METHOD_ID)
+        } else {
+            None
+        }
+    }
+    /// Fall through to `bcode.api_key` if the startup probe still allows it,
+    /// else the real interactive login (`oidc`/`auth_provider`), else `None`
+    /// when neither is configured or `preferred_method` is pinned.
     pub(super) fn cached_token_fallthrough_method_id(
         &self,
     ) -> Option<acp::AuthMethodId> {
@@ -1339,11 +1354,12 @@ impl MvpAgent {
                 self.auth_manager.first_party_env_api_key_ok(),
             ),
             preferred,
+            self.interactive_fallthrough_method(),
         )?;
         Some(acp::AuthMethodId::new(id))
     }
-    /// Shared exit for missing/expired/legacy `cached_token`: fall through with `use_oauth` only when the target is interactive `bcode.invalid`.
-    /// When `preferred_method` is pinned, fail instead of falling through.
+    /// Shared exit for missing/expired/legacy `cached_token`: fall through with `use_oauth` only when the target is enterprise `oidc`.
+    /// When `preferred_method` is pinned, or nothing is left to fall through to, fail instead.
     pub(super) async fn authenticate_after_cached_token_unavailable(
         &self,
         arguments: acp::AuthenticateRequest,
@@ -1354,9 +1370,12 @@ impl MvpAgent {
                 Some(crate::auth::PreferredAuthMethod::ApiKey) => {
                     auth_method::PREFERRED_API_KEY_UNAVAILABLE
                 }
-                _ => auth_method::PREFERRED_OIDC_UNAVAILABLE,
+                Some(crate::auth::PreferredAuthMethod::Oidc) => {
+                    auth_method::PREFERRED_OIDC_UNAVAILABLE
+                }
+                None => auth_method::AUTH_ERROR_SESSION_EXPIRED,
             };
-            tracing::info!(%msg, "cached_token unavailable; preferred_method forbids fallthrough");
+            tracing::info!(%msg, "cached_token unavailable; no fallthrough available");
             bcode_telemetry::unified_log::warn(
                 "auth cached_token fallthrough blocked by preferred_method",
                 None,
@@ -1368,7 +1387,7 @@ impl MvpAgent {
             );
             return Err(acp::Error::auth_required().data(msg));
         };
-        let meta = if method_id.0.as_ref() == auth_method::BCODE_COM_METHOD_ID {
+        let meta = if method_id.0.as_ref() == auth_method::OIDC_METHOD_ID {
             serde_json::json!({ "use_oauth": true }).as_object().cloned()
         } else {
             arguments.meta
