@@ -123,18 +123,71 @@ fn detect_effort_phase(models: &ModelState, args_query: &str) -> Option<acp::Mod
 
 /// One row per logical model.
 /// Reasoning models get a trailing space in `insert_text` so the prompt widget chains into the effort sub-menu.
+/// Catalog provider ids in the order `bcode login` lists them, so the picker
+/// groups its rows the same way. A model with no `provider` meta (a
+/// hand-configured `[model.*]` entry outside the catalog) sorts after every
+/// known provider, keeping its place relative to other such models.
+fn provider_rank_table() -> Vec<String> {
+    bcode_models::providers()
+        .iter()
+        .map(|p| p.id.clone())
+        .collect()
+}
+
+fn provider_id_of(info: &acp::ModelInfo) -> Option<&str> {
+    info.meta.as_ref()?.get("provider")?.as_str()
+}
+
+fn provider_display_name(id: &str) -> String {
+    bcode_models::provider(id)
+        .map(|p| p.name.clone())
+        .unwrap_or_else(|| id.to_string())
+}
+
+fn provider_rank(order: &[String], info: &acp::ModelInfo) -> usize {
+    provider_id_of(info)
+        .and_then(|id| order.iter().position(|p| p == id))
+        .unwrap_or(usize::MAX)
+}
+
+/// Whether the server reported a usable credential for this model
+/// (`to_acp_model_info`'s `hasCredential` meta key). Missing key -- an older
+/// server, or a synthetic `ModelInfo` built for tests -- reads as "yes", so
+/// this only ever adds a warning, never a false one.
+fn model_has_credential(info: &acp::ModelInfo) -> bool {
+    info.meta
+        .as_ref()
+        .and_then(|m| m.get("hasCredential"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true)
+}
+
 fn build_model_items(models: &ModelState) -> Vec<ArgItem> {
     let current_id = models.current.as_ref();
-    let mut items: Vec<ArgItem> = Vec::with_capacity(models.available.len());
-    for (id, info) in &models.available {
+    let order = provider_rank_table();
+    let mut rows: Vec<(usize, &acp::ModelId, &acp::ModelInfo)> = models
+        .available
+        .iter()
+        .map(|(id, info)| (provider_rank(&order, info), id, info))
+        .collect();
+    // Stable: models tie-break on their original catalog order within a provider.
+    rows.sort_by_key(|(rank, ..)| *rank);
+
+    let mut items: Vec<ArgItem> = Vec::with_capacity(rows.len());
+    for (_, id, info) in rows {
         let is_current = current_id == Some(id);
         let supports = supports_reasoning_effort(info);
 
-        let display = if is_current {
-            format!("{} (current)", info.name)
-        } else {
-            info.name.clone()
+        let mut display = match provider_id_of(info) {
+            Some(provider) => format!("{} · {}", provider_display_name(provider), info.name),
+            None => info.name.clone(),
         };
+        if is_current {
+            display.push_str(" (current)");
+        }
+        if !model_has_credential(info) {
+            display.push_str(" — no credential, run `bcode login`");
+        }
 
         // A trailing space on reasoning models signals "more input expected" to the prompt widget
         // Enter then advances to the effort phase instead of submitting
@@ -272,6 +325,76 @@ mod tests {
         // A plain model has no trailing space, so Enter commits immediately
         let plain = items.iter().find(|i| i.match_text == "Bcode 4.5").unwrap();
         assert_eq!(plain.insert_text, "Bcode 4.5");
+    }
+
+    fn model_with_meta(
+        id: &str,
+        name: &str,
+        provider: Option<&str>,
+        has_credential: bool,
+    ) -> (acp::ModelId, acp::ModelInfo) {
+        let id = acp::ModelId::new(Arc::from(id));
+        let mut meta = serde_json::Map::new();
+        if let Some(provider) = provider {
+            meta.insert(
+                "provider".into(),
+                serde_json::Value::String(provider.to_string()),
+            );
+        }
+        meta.insert(
+            "hasCredential".into(),
+            serde_json::Value::Bool(has_credential),
+        );
+        let info = acp::ModelInfo::new(id.clone(), name.to_string())
+            .meta(serde_json::Value::Object(meta).as_object().cloned());
+        (id, info)
+    }
+
+    /// Provider identity and model ids come from the live catalog, not hardcoded
+    /// strings, so this test does not rot (or reintroduce a brand string) when the
+    /// catalog changes.
+    #[test]
+    fn picker_groups_by_provider_and_flags_missing_credentials() {
+        let catalog = bcode_models::providers();
+        assert!(
+            catalog.len() >= 2,
+            "test needs at least two catalog providers"
+        );
+
+        let mut state = ModelState::default();
+        // Inserted in reverse catalog order, to prove the picker re-sorts rather than
+        // trusting insertion order. Only the first catalog provider's model is
+        // flagged as missing a credential.
+        for (i, p) in catalog.iter().enumerate().rev() {
+            let (id, info) = model_with_meta(
+                &format!("test-model-{}", p.id),
+                &format!("Test Model ({})", p.id),
+                Some(p.id.as_str()),
+                i != 0,
+            );
+            state.available.insert(id, info);
+        }
+        let (cid, cinfo) = plain_model("my-custom-model", "My Custom Model");
+        state.available.insert(cid, cinfo);
+
+        let items = build_model_items(&state);
+        let displays: Vec<&str> = items.iter().map(|i| i.display.as_str()).collect();
+        let mut expected: Vec<String> = catalog
+            .iter()
+            .enumerate()
+            .map(|(i, p)| {
+                let mut d = format!("{} · Test Model ({})", p.name, p.id);
+                if i == 0 {
+                    d.push_str(" — no credential, run `bcode login`");
+                }
+                d
+            })
+            .collect();
+        expected.push("My Custom Model".to_string());
+        assert_eq!(
+            displays,
+            expected.iter().map(String::as_str).collect::<Vec<_>>()
+        );
     }
 
     #[test]
