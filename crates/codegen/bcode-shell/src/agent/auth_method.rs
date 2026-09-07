@@ -64,6 +64,15 @@ where
 
 /// Single advertise policy for `bcode.api_key`: the kill switch, BYOK, and the first-party env key.
 /// The env key is gated by `first_party_env_ok` (probe result, or `true` for presence-only); BYOK still advertises without a probe.
+///
+/// Uses [`ModelEntry::has_own_or_provider_credential`], not [`ModelEntry::has_own_credentials`]:
+/// the latter only sees a key/env_key/account/auth_provider *attached to the model*, not the
+/// provider-wide credential `bcode login <provider>` stores. A `has_own_credentials`-only
+/// check here means a successful `bcode login` never satisfies this predicate, so the
+/// fresh-user login screen never clears even though a request would resolve a real key.
+/// Not [`ModelEntry::has_any_credential`] either: that also falls through to the global
+/// `BCODE_API_KEY` tier unconditionally, which would let a probe-confirmed-dead global
+/// key satisfy `has_byok` and bypass the `first_party_env_ok` gate entirely.
 pub(crate) fn should_advertise_bcode_api_key_with_env_ok<'a, I>(
     disable_api_key_auth: bool,
     models: I,
@@ -75,8 +84,29 @@ where
     if disable_api_key_auth {
         return false;
     }
-    let has_byok = models.into_iter().any(ModelEntry::has_own_credentials);
+    let has_byok = models
+        .into_iter()
+        .any(ModelEntry::has_own_or_provider_credential);
     has_byok || (has_bcode_api_key_env() && first_party_env_ok)
+}
+
+/// Whether a resolvable session bearer would have anywhere to go.
+///
+/// `resolve_credentials`'s session tier only fires when
+/// [`crate::auth::backend::AuthBackend::may_receive_session`] accepts the model's
+/// `base_url`, and that gate accepts only bcode-owned hosts (`*.bcode.invalid`
+/// and the compiled prod proxy). A catalog of third-party providers therefore
+/// never receives the bearer no matter how valid it is. Advertising
+/// `cached_token` anyway tells the client it's authenticated and then every
+/// turn's credential resolution 401s -- this is the check that stops that.
+pub(crate) fn session_has_a_destination<'a, I>(models: I) -> bool
+where
+    I: IntoIterator<Item = &'a ModelEntry>,
+{
+    let backend = crate::auth::backend::ActiveAuthBackend::default();
+    models.into_iter().any(|m| {
+        crate::auth::backend::AuthBackend::may_receive_session(&backend, &m.info().base_url)
+    })
 }
 
 /// Inputs to [`build_auth_methods`].
@@ -536,6 +566,114 @@ mod tests {
         assert!(!is_session_based_method(&acp::AuthMethodId::new(
             "unknown-method"
         )));
+    }
+
+    /// A minimal `ModelEntry` for tests in this module that only need to vary
+    /// `base_url` and `auth_provider` -- everything else is inert.
+    fn model_with_base_url(base_url: &str) -> ModelEntry {
+        use crate::agent::config::{LazinessDetectorPerModelConfig, ModelInfo, default_agent_type};
+        ModelEntry {
+            info: ModelInfo {
+                user_selectable: true,
+                id: None,
+                model_family: None,
+                model: "m".to_string(),
+                base_url: base_url.to_string(),
+                name: None,
+                description: None,
+                max_completion_tokens: None,
+                temperature: None,
+                top_p: None,
+                api_backend: crate::sampling::ApiBackend::default(),
+                auth_scheme: Default::default(),
+                extra_headers: indexmap::IndexMap::new(),
+                query_params: indexmap::IndexMap::new(),
+                env_http_headers: indexmap::IndexMap::new(),
+                context_window: std::num::NonZeroU64::new(200_000).unwrap(),
+                auto_compact_threshold_percent: None,
+                system_prompt_label: None,
+                use_concise: false,
+                agent_type: default_agent_type(),
+                inference_idle_timeout_secs: None,
+                max_retries: None,
+                subagent_rate_limit_max_attempts: None,
+                hidden: false,
+                supported_in_api: true,
+                reasoning_effort: None,
+                supports_reasoning_effort: false,
+                reasoning_efforts: Vec::new(),
+                supports_backend_search: false,
+                compactions_remaining: None,
+                compaction_at_tokens: None,
+                show_model_fingerprint: false,
+                stream_tool_calls: None,
+                laziness_detector: LazinessDetectorPerModelConfig::default(),
+                variants: Vec::new(),
+            },
+            api_key: None,
+            env_key: None,
+            auth_provider: None,
+            account: None,
+            api_base_url: None,
+        }
+    }
+
+    /// A `.invalid` bcode host must never receive a session bearer -- covered
+    /// elsewhere -- but a real third-party catalog host is the case this
+    /// function exists for: no model here is bcode-owned, so a session bearer
+    /// has nowhere it may be sent.
+    #[test]
+    fn session_has_a_destination_is_false_for_an_all_third_party_catalog() {
+        let models = vec![
+            model_with_base_url("https://api.deepseek.com/v1"),
+            model_with_base_url("https://api.openai.com/v1"),
+        ];
+        assert!(!session_has_a_destination(&models));
+    }
+
+    /// A model whose `base_url` is bcode-owned gives the session bearer
+    /// somewhere to go, even alongside third-party models.
+    #[test]
+    fn session_has_a_destination_is_true_when_a_bcode_host_is_present() {
+        let models = vec![
+            model_with_base_url("https://api.deepseek.com/v1"),
+            model_with_base_url("https://cli-chat-proxy.bcode.invalid/v1"),
+        ];
+        assert!(session_has_a_destination(&models));
+    }
+
+    /// Regression for the fresh-user login-screen bug: `has_own_credentials`
+    /// treats a bare `auth_provider = "<name>"` reference as a credential the
+    /// moment it's configured, before `ensure_fresh_token` has ever minted
+    /// anything into its slot. `has_any_credential` (via `resolve_credentials`,
+    /// which reads `cached_token()`) correctly sees nothing usable yet. This is
+    /// exactly the class of false positive `should_advertise_bcode_api_key_with_env_ok`
+    /// used to have at the three call sites this predicate now replaces.
+    #[test]
+    #[serial]
+    fn auth_provider_present_but_not_yet_minted_has_no_credential() {
+        // `has_any_credential` falls through to the global env var as its last
+        // tier; guard it so an ambient `BCODE_API_KEY` on the host running this
+        // test can't make the negative assertion below spuriously pass.
+        let _no_global_key = bcode_test_support::EnvGuard::unset(BCODE_API_KEY_ENV_VAR);
+        let _no_legacy_key = bcode_test_support::EnvGuard::unset(LEGACY_BCODE_API_KEY_ENV_VAR);
+        let provider = crate::auth::AuthProviderRef::new(
+            "test-provider-not-yet-minted-9c21a4".to_string(),
+            crate::auth::AuthProviderConfig {
+                command: "echo unminted".to_string(),
+                ..Default::default()
+            },
+        );
+        let mut model = model_with_base_url("https://gateway.example/v1");
+        model.auth_provider = Some(provider);
+        assert!(
+            model.has_own_credentials(),
+            "presence alone must still satisfy the narrower, BYOK-routing predicate"
+        );
+        assert!(
+            !model.has_any_credential(None),
+            "no token has been minted into the provider's slot yet -- there is nothing to send"
+        );
     }
 
     use bcode_test_support::EnvGuard;

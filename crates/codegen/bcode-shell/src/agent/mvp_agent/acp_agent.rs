@@ -307,11 +307,19 @@ impl acp::Agent for MvpAgent {
         }
         let preferred_method_early = self.cfg.borrow().bcode_com_config.preferred_method;
         let bcode_api_base_url = self.cfg.borrow().endpoints.bcode_api_base_url.clone();
+        // `has_own_or_provider_credential`, not `has_own_credentials`: a
+        // `bcode login <provider>` credential lives in auth.json's `provider::<id>`
+        // scope, not attached to any model, so `has_own_credentials` alone can
+        // never see it -- which is why a successful `bcode login` used to leave
+        // the fresh-user login screen showing. Not `has_any_credential` either:
+        // it also falls through to the global `BCODE_API_KEY` tier this same
+        // probe is deciding whether to trust, which would make the probe-skip
+        // decision below circular.
         let has_byok = self
             .models_manager
             .models()
             .values()
-            .any(crate::agent::config::ModelEntry::has_own_credentials);
+            .any(crate::agent::config::ModelEntry::has_own_or_provider_credential);
         let first_party_env_ok = if crate::auth::should_probe_first_party_env_key(
             disable_api_key_auth,
             has_byok,
@@ -351,6 +359,15 @@ impl acp::Agent for MvpAgent {
                 SilentRefresh::Renewed(_) => true,
                 SilentRefresh::Failed(remedy) => remedy.is_self_healing(),
             };
+        }
+        // A valid session bearer is only worth advertising if `resolve_credentials`
+        // could ever actually send it. Without this gate, a user with a live bcode
+        // session but only catalog models sees `needs_login = false` and then a
+        // credential-less 401 on every turn.
+        if has_cached_token
+            && !auth_method::session_has_a_destination(self.models_manager.models().values())
+        {
+            has_cached_token = false;
         }
         let (
             login_label,
@@ -619,7 +636,7 @@ impl acp::Agent for MvpAgent {
                         .models_manager
                         .models()
                         .values()
-                        .any(|m| m.has_own_credentials())
+                        .any(|m| m.has_any_credential(None))
                     {
                         emit_login_span(false, "api_key", None, Some("no_credentials"));
                         return Err(

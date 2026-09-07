@@ -4519,6 +4519,27 @@ impl ModelEntry {
     pub(crate) fn has_own_credentials(&self) -> bool {
         self.own_credential().is_some() || self.account.is_some() || self.auth_provider.is_some()
     }
+    /// [`Self::has_own_credentials`] plus the provider-wide credential a bare
+    /// `bcode login <provider>` stores (`provider::<id>` in auth.json, read via
+    /// [`crate::auth::accounts::provider_credential`]).
+    ///
+    /// Deliberately narrower than [`Self::has_any_credential`]: this is for the
+    /// two "should the first-party `bcode.api_key` method be advertised, or its
+    /// live-env-key probe skipped" predicates, both of which already fold the
+    /// global `BCODE_API_KEY` tier in themselves, gated on a validity probe.
+    /// `has_any_credential`'s `resolve_credentials` waterfall also falls through
+    /// to that same global env var, unconditionally -- using it here would let a
+    /// probe-confirmed-dead global key still count as "BYOK" and defeat the
+    /// probe. It omits the session-bearer tier for the same reason: session
+    /// auth is a distinct, separately-advertised method.
+    pub(crate) fn has_own_or_provider_credential(&self) -> bool {
+        self.has_own_credentials()
+            || crate::auth::accounts::provider_credential(
+                self.info.model_family.as_deref(),
+                &crate::util::bcode_home::bcode_home(),
+            )
+            .is_some()
+    }
     /// Whether this model currently has *some* resolvable credential -- its
     /// own key, a named account, the provider-wide credential, a cached
     /// auth-provider token, the session bearer, or the global `BCODE_API_KEY`

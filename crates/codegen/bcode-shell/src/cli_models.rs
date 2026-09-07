@@ -36,7 +36,7 @@ impl AuthStatus {
             models.values(),
         ) && let Some(name) = models
             .iter()
-            .find_map(|(name, entry)| entry.has_own_credentials().then(|| name.clone()))
+            .find_map(|(name, entry)| entry.has_any_credential(None).then(|| name.clone()))
         {
             return Self::ModelCredentials(name);
         }
