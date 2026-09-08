@@ -205,6 +205,34 @@ pub fn remove_account_credential(home: &Path, name: &str) -> Result<bool, Provid
     accounts::remove_account_key(home, name).map_err(|e| ProviderSetupError::Io(e.to_string()))
 }
 
+/// Verify a provider key by calling the provider's own API: one
+/// `GET {base_url}/models` with a 2 second budget. This is the only network
+/// call the in-TUI provider manager makes, and only from the key-entry
+/// submit handler -- caused by the user choosing a provider and pressing
+/// enter, not by anything running with no provider selected.
+///
+/// The key is stored regardless of the verdict; this is a diagnostic shown
+/// inline, not a gate on whether the key is kept.
+pub async fn verify_provider_key(base_url: &str, key: &str) -> Result<(), String> {
+    let url = format!("{}/models", base_url.trim().trim_end_matches('/'));
+    let client = crate::http::shared_client();
+    let response = client
+        .get(&url)
+        .header(reqwest::header::AUTHORIZATION, format!("Bearer {key}"))
+        .timeout(std::time::Duration::from_secs(2))
+        .send()
+        .await
+        .map_err(|e| crate::http::error_cause_chain(&e))?;
+    if response.status().is_success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "provider responded with HTTP {}",
+            response.status()
+        ))
+    }
+}
+
 /// Whether any model in `models` currently resolves a credential, by the same
 /// path `resolve_credentials` uses at request time. The signal a client uses
 /// to decide whether the provider-setup screen is still needed.

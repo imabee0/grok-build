@@ -169,6 +169,7 @@ fn test_app() -> AppView {
         consent_answered: None,
         login_label: None,
         login_method_id: None,
+        provider_setup: None,
         auth_start_mode: AuthMode::Pending,
         auth_code_input: Default::default(),
         next_auth_request_seq: 1,

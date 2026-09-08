@@ -583,8 +583,9 @@ fn login_with_empty_auth_methods_fails_closed() {
 /// `/login` (and the 401 re-auth prompt, which routes through the same dispatcher) must not
 /// auto-open a browser flow when nothing real is behind it: no enterprise
 /// OIDC, no external auth-provider command. Same gate as the startup check in `event_loop.rs`.
+/// Opens the in-TUI provider manager instead of an error pointing out of the TUI.
 #[test]
-fn login_with_only_provider_setup_shows_provider_hint_instead_of_authenticating() {
+fn login_with_only_provider_setup_opens_the_provider_manager() {
     let mut app = test_app_with_agent();
     app.auth_methods = vec![acp::AuthMethod::Agent(acp::AuthMethodAgent::new(
         acp::AuthMethodId::new(bcode_shell::agent::auth_method::PROVIDER_SETUP_METHOD_ID),
@@ -600,13 +601,17 @@ fn login_with_only_provider_setup_shows_provider_hint_instead_of_authenticating(
         "must not start Authenticate against an unreachable default"
     );
     assert!(
-        matches!(
-            &app.auth_state,
-            AuthState::Pending { error: Some(msg) }
-                if msg.contains("Sign in to a provider")
-        ),
-        "must surface the provider sign-in hint, got {:?}",
+        matches!(&app.auth_state, AuthState::Pending { error: None }),
+        "must not surface an error message pointing out of the TUI, got {:?}",
         app.auth_state
+    );
+    assert!(
+        app.provider_setup.is_some(),
+        "must open the in-TUI provider manager"
+    );
+    assert!(
+        app.login_label.is_none() && app.login_method_id.is_none(),
+        "stale login label/method must be cleared so the old menu can't render"
     );
 }
 

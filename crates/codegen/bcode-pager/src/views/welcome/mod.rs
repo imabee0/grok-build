@@ -612,6 +612,9 @@ pub struct WelcomeRenderParams<'a> {
     pub consent_state: &'a crate::app::consent::ConsentState,
     pub consent_hover_link: Option<usize>,
     pub login_label: Option<&'a str>,
+    /// `Some` while the in-TUI provider manager is showing instead of the
+    /// (now unreachable) "Login with bcode" menu.
+    pub provider_setup: Option<&'a crate::views::provider_manager::ProviderManagerState>,
     pub auth_code_input: &'a str,
     pub auth_code_cursor_byte: usize,
     pub clipboard_delivery: Option<crate::clipboard::ClipboardDelivery>,
@@ -715,6 +718,20 @@ pub fn render_welcome(
     render_top_bar(top_bar_inner, buf, &theme, None);
 
     let mut result = match params.auth_state {
+        AuthState::Pending { error: _ } if params.provider_setup.is_some() => {
+            // Rendered borderless full-screen in both the first-run and the
+            // mid-session `/login`-detour case: the welcome screen has no
+            // other content to preserve behind it while this is showing.
+            // The bordered modal chrome is for the mid-session `/providers`
+            // overlay on top of a real agent view (not wired through here).
+            let state = params.provider_setup.expect("checked by this arm's guard");
+            crate::views::provider_manager::render_provider_manager_fullscreen(
+                content_area,
+                buf,
+                state,
+            );
+            WelcomeRenderResult::default()
+        }
         AuthState::Pending { error } => {
             let label = params.login_label.unwrap_or("a provider");
             let login_text = format!("Login with {}", label);
@@ -2675,6 +2692,33 @@ mod tests {
         );
     }
 
+    /// A fresh user (nothing resolves anywhere) must land on the in-TUI
+    /// provider picker, not a "Login with bcode" row for an account that
+    /// does not exist. Every catalog provider must be visible, and no
+    /// sign-in affordance may name bcode itself.
+    #[test]
+    fn fresh_user_welcome_shows_the_provider_list_not_a_login_row() {
+        let auth = AuthState::Pending { error: None };
+        let trust = TrustState::Done;
+        let home = tempfile::tempdir().expect("tempdir");
+        let state = crate::views::provider_manager::ProviderManagerState::first_run(home.path());
+        let mut params = render_params(&auth, &trust, None);
+        params.provider_setup = Some(&state);
+        let text = render_done_text(&params);
+
+        for provider in bcode_models::providers() {
+            assert!(
+                text.contains(&provider.name),
+                "expected provider {} to appear in the picker:\n{text}",
+                provider.name
+            );
+        }
+        assert!(
+            !text.contains("Login with"),
+            "must not offer to log in to a bcode account that does not exist:\n{text}"
+        );
+    }
+
     #[test]
     fn auth_copy_feedback_covers_delivery_states() {
         let theme = Theme::current();
@@ -2731,6 +2775,7 @@ mod tests {
             consent_state: &ConsentState::Done,
             consent_hover_link: None,
             login_label: None,
+            provider_setup: None,
             auth_code_input: "",
             auth_code_cursor_byte: 0,
             clipboard_delivery: None,
