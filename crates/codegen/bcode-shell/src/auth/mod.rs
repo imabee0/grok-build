@@ -16,6 +16,7 @@ pub(crate) mod manager;
 mod model;
 pub mod oidc;
 mod pre_tui;
+pub(crate) mod provider_oauth;
 pub mod provider_setup;
 pub(crate) mod recovery;
 pub(crate) mod refresh;
@@ -53,6 +54,7 @@ pub use flow::{
 };
 pub use jwt::{is_jwt_expired_or_near, parse_jwt_expiration};
 pub use pre_tui::{PreTuiLoginOutcome, maybe_run_pre_tui_external_login};
+pub(crate) use provider_oauth::{ProviderOAuthOutcome, ProviderOAuthRef};
 mod meta;
 pub use error::{AuthError, RefreshTokenError, RefreshTokenFailedReason};
 pub use manager::{AuthManager, shared_api_key_provider};

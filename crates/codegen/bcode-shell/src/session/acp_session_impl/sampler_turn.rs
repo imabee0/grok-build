@@ -433,6 +433,13 @@ impl SessionActor {
         self.model_auth_state(model_id).1
     }
 
+    pub(super) fn model_oauth_provider(
+        &self,
+        model_id: &str,
+    ) -> Option<crate::auth::ProviderOAuthRef> {
+        self.model_auth_state(model_id).2
+    }
+
     /// Drop the memoized per-model auth state; see [`Self::model_auth_memo`] for why each model/credential chokepoint must call this.
     pub(crate) fn invalidate_model_auth_memo(&self) {
         self.model_auth_memo.replace(None);
@@ -445,6 +452,7 @@ impl SessionActor {
     ) -> (
         crate::agent::config::ModelAuthFacts,
         Option<crate::auth::AuthProviderRef>,
+        Option<crate::auth::ProviderOAuthRef>,
     ) {
         use crate::agent::auth_method::ModelByok;
         use crate::session::acp_session::ModelAuthMemo;
@@ -452,24 +460,33 @@ impl SessionActor {
             && memo.model_id == model_id
             && memo.facts.byok != ModelByok::Unknown
         {
-            return (memo.facts, memo.provider.clone());
+            return (
+                memo.facts,
+                memo.provider.clone(),
+                memo.oauth_provider.clone(),
+            );
         }
-        let (fresh, provider) =
+        let (fresh, provider, oauth_provider) =
             crate::agent::config::resolve_model_auth_facts_and_provider(model_id);
         if fresh.byok == ModelByok::Unknown {
             if let Some(memo) = self.model_auth_memo.borrow().as_ref()
                 && memo.model_id == model_id
             {
-                return (memo.facts, memo.provider.clone());
+                return (
+                    memo.facts,
+                    memo.provider.clone(),
+                    memo.oauth_provider.clone(),
+                );
             }
-            return (fresh, provider);
+            return (fresh, provider, oauth_provider);
         }
         *self.model_auth_memo.borrow_mut() = Some(ModelAuthMemo {
             model_id: model_id.to_string(),
             facts: fresh,
             provider: provider.clone(),
+            oauth_provider: oauth_provider.clone(),
         });
-        (fresh, provider)
+        (fresh, provider, oauth_provider)
     }
 
     /// The single writer of a provider mint/rotation into chat-state credentials.
@@ -550,6 +567,103 @@ impl SessionActor {
         );
         bcode_telemetry::unified_log::info(
             "auth recovery: sampler 401, auth provider re-mint, retrying",
+            Some(self.session_info.id.0.as_ref()),
+            None,
+        );
+        self.set_chat_api_key(new_key).await;
+        true
+    }
+
+    /// Pre-turn arm for a model whose provider's own OAuth credential is
+    /// stored: refresh it (single-flight, disk-backed) if due, and adopt a
+    /// rotation chat state missed. Mirrors
+    /// [`Self::refresh_provider_token_pre_turn`]; the outcome type differs
+    /// because an OAuth credential can be terminally revoked, which a
+    /// command mint has no equivalent of.
+    /// Returns `true` when this model actually has an OAuth credential
+    /// stored (whatever the refresh outcome), `false` when `provider`
+    /// resolves nothing -- the attachment in `resolve_model_list` is
+    /// unconditional for every model with a `model_family`, so the caller
+    /// needs this to tell "not this model's tier, fall through to JWT
+    /// refresh" apart from "is this tier's, handled here."
+    async fn refresh_oauth_provider_token_pre_turn(
+        &self,
+        provider: &crate::auth::ProviderOAuthRef,
+        current_key: Option<&str>,
+        model_id: &str,
+    ) -> bool {
+        let bcode_home = crate::util::bcode_home::bcode_home();
+        match provider.ensure_fresh_token(&bcode_home, current_key).await {
+            crate::auth::ProviderOAuthOutcome::Rotated(new_key) => {
+                tracing::info!(
+                    model = %model_id,
+                    cold = current_key.is_none(),
+                    "provider OAuth: token rotated pre-turn"
+                );
+                self.set_chat_api_key(new_key).await;
+                true
+            }
+            crate::auth::ProviderOAuthOutcome::Unchanged => true,
+            // Nothing stored for this provider: not this model's tier.
+            crate::auth::ProviderOAuthOutcome::Unusable => false,
+            crate::auth::ProviderOAuthOutcome::RefreshFailed
+            | crate::auth::ProviderOAuthOutcome::ReauthRequired => {
+                tracing::warn!(
+                    session_id = %self.session_info.id.0,
+                    model = %model_id,
+                    "provider OAuth: pre-turn refresh failed"
+                );
+                bcode_telemetry::unified_log::warn(
+                    "provider OAuth: pre-turn refresh failed",
+                    Some(self.session_info.id.0.as_ref()),
+                    Some(serde_json::json!({
+                        "model": model_id,
+                        "cold": current_key.is_none(),
+                    })),
+                );
+                true
+            }
+        }
+    }
+
+    /// 401 arm for a model whose provider's own OAuth credential is stored:
+    /// force a refresh once and resubmit. Mirrors
+    /// [`Self::try_provider_401_recovery`].
+    async fn try_oauth_provider_401_recovery(
+        &self,
+        provider: &crate::auth::ProviderOAuthRef,
+    ) -> bool {
+        let bcode_home = crate::util::bcode_home::bcode_home();
+        let rejected_key = self.chat_state_handle.get_credentials().await.api_key;
+        let recovered = match rejected_key {
+            Some(ref rejected_key) => {
+                provider
+                    .recover_rejected_token(&bcode_home, rejected_key)
+                    .await
+            }
+            None => provider
+                .ensure_fresh_token(&bcode_home, None)
+                .await
+                .rotated(),
+        };
+        let Some(new_key) = recovered else {
+            tracing::warn!(
+                session_id = %self.session_info.id.0,
+                "auth recovery: sampler 401, provider OAuth refresh declined or failed"
+            );
+            bcode_telemetry::unified_log::warn(
+                "auth recovery: sampler 401, provider OAuth refresh declined or failed",
+                Some(self.session_info.id.0.as_ref()),
+                None,
+            );
+            return false;
+        };
+        tracing::info!(
+            session_id = %self.session_info.id.0,
+            "auth recovery: sampler 401, provider OAuth refreshed, retrying"
+        );
+        bcode_telemetry::unified_log::info(
+            "auth recovery: sampler 401, provider OAuth refreshed, retrying",
             Some(self.session_info.id.0.as_ref()),
             None,
         );
@@ -1380,6 +1494,21 @@ impl SessionActor {
             });
         }
 
+        // 4c-bis. Same as 4c, for a model whose provider's own OAuth
+        // credential is stored. `model_oauth_provider` always resolves
+        // `Some` for a model with a `model_family` (unlike `auth_provider`,
+        // attachment isn't config-gated), so the no-op case is entirely
+        // `try_oauth_provider_401_recovery`'s internal "nothing stored" check.
+        if let Some(oauth_provider) = self.model_oauth_provider(&failed_model_id)
+            && self.try_oauth_provider_401_recovery(&oauth_provider).await
+        {
+            self.prepare_sampler_for_turn().await;
+            return Ok(SamplerFailureRecovery::RefreshAuthAndResubmit {
+                credential: error.credential,
+                store: RecoveredStore::AuthProvider,
+            });
+        }
+
         // 4d. Bounded resubmit, after the auth arms, before the terminal paths.
         //     Budgeted workflow children stay terminal (guards above)
         if transient_retry_eligible(&error) && transient.enabled {
@@ -1978,6 +2107,20 @@ impl SessionActor {
             )
             .await;
             // Provider models carry no session JWT, so skip the JWT refresh below.
+            return;
+        }
+
+        // A catalog provider's own OAuth credential, same seam as above:
+        // `resolve_credentials` stays cache-only, this is where it refreshes.
+        if let Some(oauth_provider) = self.model_oauth_provider(&current_model_id)
+            && self
+                .refresh_oauth_provider_token_pre_turn(
+                    &oauth_provider,
+                    current_key.as_deref(),
+                    &current_model_id,
+                )
+                .await
+        {
             return;
         }
 

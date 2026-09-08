@@ -48,6 +48,34 @@ pub struct ProviderInfo {
     pub default_model: String,
     /// Where a user without a key yet can go create one.
     pub api_key_url: String,
+    /// OAuth2/OIDC subscription sign-in for this provider, if it offers one.
+    /// Absent for every provider in this file today -- none of them expose a
+    /// public OAuth app for API access, so there is no truthful data to put
+    /// here. The mechanism this drives is proven against the in-tree mock
+    /// IdP; a real entry only belongs here once a provider actually
+    /// publishes real issuer/client-id values.
+    #[serde(default)]
+    pub auth: Option<ProviderAuth>,
+}
+
+/// A provider's own OAuth2/OIDC app for subscription sign-in, independent of
+/// its API-key tier. Every field comes from the provider's own published
+/// values -- never invented -- which is why every provider in this file
+/// leaves this unset.
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub struct ProviderAuth {
+    pub issuer: String,
+    pub client_id: String,
+    #[serde(default)]
+    pub scopes: Vec<String>,
+    /// Loopback ports to try, in order, for the OAuth redirect_uri. Real
+    /// vendors pre-register exact ports rather than accepting any; this list
+    /// must be non-empty whenever `auth` is set.
+    pub redirect_ports: Vec<u16>,
+    /// Extra headers this provider's inference API requires alongside the
+    /// bearer token (e.g. an account-id header), sent verbatim.
+    #[serde(default)]
+    pub inference_headers: std::collections::BTreeMap<String, String>,
 }
 
 static DEFAULTS: LazyLock<DefaultModels> = LazyLock::new(|| {
@@ -78,6 +106,18 @@ static DEFAULTS: LazyLock<DefaultModels> = LazyLock::new(|| {
             provider.id,
             provider.default_model,
         );
+        if let Some(auth) = &provider.auth {
+            assert!(
+                !auth.issuer.trim().is_empty() && !auth.client_id.trim().is_empty(),
+                "default_models.json: provider '{}' has an 'auth' entry with an empty issuer or client_id",
+                provider.id,
+            );
+            assert!(
+                !auth.redirect_ports.is_empty(),
+                "default_models.json: provider '{}' has an 'auth' entry with no redirect_ports",
+                provider.id,
+            );
+        }
     }
 
     defaults

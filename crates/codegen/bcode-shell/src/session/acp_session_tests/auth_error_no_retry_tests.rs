@@ -1042,6 +1042,7 @@ async fn model_auth_memo_serves_cached_status_and_keys_on_model() {
                         auth_scheme: Default::default(),
                     },
                     provider: None,
+                    oauth_provider: None,
                 }));
 
             // Cache hit: served without consulting config.
@@ -1085,6 +1086,7 @@ async fn reconstruct_full_config_no_bearer_resolver_for_byok_model_on_session_me
                         auth_scheme: Default::default(),
                     },
                     provider: None,
+                    oauth_provider: None,
                 }));
 
             let cfg = actor.reconstruct_full_config().await;
@@ -1131,6 +1133,7 @@ async fn set_session_model_invalidates_byok_memo_for_same_model_id() {
                         auth_scheme: Default::default(),
                     },
                     provider: None,
+                    oauth_provider: None,
                 }));
 
             // Switch to the same model_id, now a per-model BYOK model on a third-party endpoint
@@ -1198,6 +1201,7 @@ async fn seed_provider_memo(actor: &Arc<SessionActor>, provider: crate::auth::Au
                 auth_scheme: Default::default(),
             },
             provider: Some(provider),
+            oauth_provider: None,
         }));
 }
 

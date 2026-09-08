@@ -335,6 +335,7 @@ async fn build_session_info_sources_show_model_fingerprint_from_catalog() {
                 env_key: None,
                 auth_provider: None,
                 account: None,
+                oauth_provider: None,
                 api_base_url: None,
             };
             entry.info.show_model_fingerprint = false;

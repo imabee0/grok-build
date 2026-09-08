@@ -3608,6 +3608,16 @@ pub(crate) fn resolve_model_list(
         resolved.insert(key.clone(), entry);
     }
     for (key, entry) in resolved.iter_mut() {
+        // Every model with a `model_family` gets a reference to that
+        // provider's own OAuth credential -- unconditionally, like the plain
+        // provider-key tier already reads `auth.json` unconditionally. It
+        // resolves to nothing unless a `provider::<id>` OAuth credential is
+        // actually stored (see `ProviderOAuthRef::cached_token`).
+        if entry.oauth_provider.is_none()
+            && let Some(family) = entry.info.model_family.clone()
+        {
+            entry.oauth_provider = Some(crate::auth::ProviderOAuthRef::new(family));
+        }
         if let Some(ref mut provider) = entry.auth_provider
             && !provider.is_fail_closed()
         {
@@ -4466,6 +4476,15 @@ pub struct ModelEntry {
     /// still win: an account is the tier below them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub account: Option<crate::auth::AccountRef>,
+    /// This model's provider's own OAuth credential (`bcode login`'s
+    /// subscription sign-in), attached by `resolve_model_list` to every
+    /// model with a `model_family`. Unlike `auth_provider`/`account` this
+    /// isn't config-driven: it's always attached and resolves to nothing
+    /// unless a `provider::<id>` OAuth credential is actually stored, the
+    /// same way the plain provider-key tier already reads `auth.json`
+    /// unconditionally.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) oauth_provider: Option<crate::auth::ProviderOAuthRef>,
     /// When set, `base_url` is used for session auth, `api_base_url` for API-key auth.
     pub api_base_url: Option<String>,
 }
@@ -4480,6 +4499,7 @@ impl ModelEntry {
             env_key: None,
             auth_provider: None,
             account: None,
+            oauth_provider: None,
             api_base_url: None,
         }
     }
@@ -4493,6 +4513,7 @@ impl ModelEntry {
             env_key: entry.env_key.clone(),
             auth_provider: None,
             account: None,
+            oauth_provider: None,
             api_base_url: entry.api_base_url.clone(),
         }
     }
@@ -4954,13 +4975,23 @@ pub(crate) fn resolve_credentials(
             info.base_url.clone(),
             bcode_chat_state::AuthType::ApiKey,
         )
-    } else if let Some(key) = crate::auth::accounts::provider_credential(
-        info.model_family.as_deref(),
-        &crate::util::bcode_home::bcode_home(),
-    ) {
+    } else if let Some(key) = model
+        .oauth_provider
+        .as_ref()
+        .and_then(|p| p.cached_token(&crate::util::bcode_home::bcode_home()))
+        .or_else(|| {
+            crate::auth::accounts::provider_credential(
+                info.model_family.as_deref(),
+                &crate::util::bcode_home::bcode_home(),
+            )
+        })
+    {
         // `bcode login`'s zero-config tier: a key stored for the model's
         // provider, one level below a named account so `bcode account add`
-        // still reaches a second credential on the same provider.
+        // still reaches a second credential on the same provider. An
+        // OAuth-mode credential is served (and expiry-checked) through
+        // `oauth_provider`; a plain API key falls through to the same
+        // `auth.json` scope's bare read, unchanged from before.
         (
             Some(key),
             info.base_url.clone(),
@@ -5091,13 +5122,18 @@ pub(crate) struct ModelAuthFacts {
 /// An empty `model_id` (no sampling config yet) yields `Unknown`, not `NotByok`, so the gate isn't activated for an unidentified model.
 pub(crate) fn resolve_model_auth_facts_and_provider(
     model_id: &str,
-) -> (ModelAuthFacts, Option<crate::auth::AuthProviderRef>) {
+) -> (
+    ModelAuthFacts,
+    Option<crate::auth::AuthProviderRef>,
+    Option<crate::auth::ProviderOAuthRef>,
+) {
     if model_id.is_empty() {
         return (
             ModelAuthFacts {
                 byok: ModelByok::Unknown,
                 auth_scheme: AuthScheme::default(),
             },
+            None,
             None,
         );
     }
@@ -5113,7 +5149,11 @@ pub(crate) fn resolve_model_auth_facts_and_provider(
             ModelLookup::Loaded(Some(e)) => e.effective_auth_provider().cloned(),
             _ => None,
         };
-        (facts, provider)
+        let oauth_provider = match lookup {
+            ModelLookup::Loaded(Some(e)) => e.oauth_provider.clone(),
+            _ => None,
+        };
+        (facts, provider, oauth_provider)
     })
 }
 fn byok_from_lookup(lookup: &ModelLookup) -> ModelByok {
@@ -5229,6 +5269,7 @@ pub(crate) fn resolve_aux_model_sampling_config(
             env_key: None,
             auth_provider: None,
             account: None,
+            oauth_provider: None,
             api_base_url: None,
         };
         let credentials = resolve_credentials_enforced(&entry, session_key, disable_api_key_auth);
@@ -5460,6 +5501,7 @@ fn resolve_hidden_default_web_search_sampling_config(
         env_key: None,
         auth_provider: None,
         account: None,
+        oauth_provider: None,
         api_base_url: None,
     };
     let credentials = resolve_credentials_enforced(&entry, session_key, disable_api_key_auth);

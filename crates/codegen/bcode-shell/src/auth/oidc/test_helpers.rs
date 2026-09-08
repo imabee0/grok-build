@@ -9,8 +9,8 @@ pub(super) const TEST_KID: &str = "test-kid";
 pub(super) fn test_nonce() -> String {
     format!("tn-{:x}", std::process::id())
 }
-pub(super) const TEST_CLIENT_ID: &str = "test-client-id";
-pub(super) fn ensure_crypto_provider() {
+pub(crate) const TEST_CLIENT_ID: &str = "test-client-id";
+pub(crate) fn ensure_crypto_provider() {
     bcode_extra_ca::ensure_default_crypto_provider();
     let _ = jsonwebtoken::crypto::rust_crypto::DEFAULT_PROVIDER.install_default();
 }
@@ -44,7 +44,7 @@ pub(super) async fn mock_idp_token() -> (String, String, Discovery, tokio::task:
         .to_string();
     (issuer, id_token, discovery, handle)
 }
-pub(super) async fn start_mock_idp() -> (String, tokio::task::JoinHandle<()>) {
+pub(crate) async fn start_mock_idp() -> (String, tokio::task::JoinHandle<()>) {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let issuer = format!("http://127.0.0.1:{}", listener.local_addr().unwrap().port());
     let issuer_for_discovery = issuer.clone();

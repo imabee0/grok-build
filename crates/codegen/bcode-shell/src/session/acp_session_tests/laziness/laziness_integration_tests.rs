@@ -33,6 +33,7 @@ fn detector_entry(
         env_key: None,
         auth_provider: None,
         account: None,
+        oauth_provider: None,
         api_base_url: None,
     }
 }

@@ -2356,6 +2356,7 @@ fn test_model_entry(model_id: &str) -> crate::agent::config::ModelEntry {
         env_key: None,
         auth_provider: None,
         account: None,
+        oauth_provider: None,
         api_base_url: None,
     }
 }
