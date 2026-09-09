@@ -25,7 +25,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Paragraph, Widget};
+use ratatui::widgets::{Block, Borders, Padding, Paragraph, Widget};
 use std::path::Path;
 
 /// Which list is showing: catalog providers, or named `[accounts.*]` entries.
@@ -60,6 +60,12 @@ pub enum ProviderMode {
     /// Purely a rendering state; the host clears it via [`Self::finish_key_verification`].
     Verifying {
         target: KeyTarget,
+    },
+    /// A browser-based OAuth sign-in is running for this provider. The host
+    /// runs the shell's provider login flow; completion reloads statuses.
+    SigningIn {
+        provider_id: String,
+        provider_name: String,
     },
     /// Naming a new account before its key-entry step.
     NamingAccount {
@@ -101,6 +107,11 @@ pub enum ProviderManagerOutcome {
     },
     /// Set this catalog model id as `models.default`.
     SetDefaultModel(String),
+    /// Start a browser-based OAuth sign-in for this provider (it has an
+    /// `auth` entry in the catalog, e.g. a ChatGPT subscription).
+    OAuthLogin {
+        provider_id: String,
+    },
     /// The user declined the post-setup default-model offer. Purely a signal
     /// for the host to finish authentication anyway (the credential still
     /// resolves; the user just didn't want to change the default).
@@ -269,11 +280,33 @@ impl ProviderManagerState {
         });
     }
 
+    /// The host calls this once a browser-based OAuth sign-in for `provider_id`
+    /// finishes. Reloads statuses and, on success, leaves `SigningIn` for the
+    /// host to decide whether authentication is now satisfied.
+    pub fn finish_oauth(&mut self, home: &Path, provider_id: &str, result: Result<(), String>) {
+        self.reload(home);
+        if matches!(&self.mode, ProviderMode::SigningIn { provider_id: id, .. } if id == provider_id)
+        {
+            self.mode = ProviderMode::Browse;
+        }
+        self.notice = Some(match result {
+            Ok(()) => (format!("{provider_id}: signed in"), false),
+            Err(e) => (format!("{provider_id}: sign-in failed: {e}"), true),
+        });
+    }
+
     pub fn handle_key(&mut self, key: &KeyEvent) -> ProviderManagerOutcome {
         match &mut self.mode {
             ProviderMode::Browse => self.handle_browse_key(key),
             ProviderMode::EnteringKey { .. } => self.handle_entering_key(key),
             ProviderMode::Verifying { .. } => ProviderManagerOutcome::Unchanged,
+            ProviderMode::SigningIn { .. } => match key.code {
+                KeyCode::Esc if !self.first_run => {
+                    self.mode = ProviderMode::Browse;
+                    ProviderManagerOutcome::Changed
+                }
+                _ => ProviderManagerOutcome::Unchanged,
+            },
             ProviderMode::NamingAccount { .. } => self.handle_naming_account_key(key),
             ProviderMode::ConfirmRemove { target } => {
                 let target = target.clone();
@@ -369,6 +402,23 @@ impl ProviderManagerState {
                 let Some(target) = target else {
                     return ProviderManagerOutcome::Unchanged;
                 };
+                // A provider with its own OAuth app signs in via the browser,
+                // not a pasted key.
+                if self.tab == ProviderTab::Providers
+                    && self
+                        .selected_provider()
+                        .is_some_and(|p| p.info.auth.is_some())
+                {
+                    let (pid, pname) = {
+                        let provider = self.selected_provider().expect("checked above");
+                        (provider.info.id.clone(), provider.info.name.clone())
+                    };
+                    self.mode = ProviderMode::SigningIn {
+                        provider_id: pid.clone(),
+                        provider_name: pname,
+                    };
+                    return ProviderManagerOutcome::OAuthLogin { provider_id: pid };
+                }
                 self.mode = ProviderMode::EnteringKey {
                     target,
                     editor: LineEditor::default(),
@@ -518,11 +568,16 @@ fn source_badge(source: CredentialSource) -> (&'static str, bool) {
     }
 }
 
+fn cols(text: &str) -> usize {
+    unicode_width::UnicodeWidthStr::width(text)
+}
+
 fn render_provider_row(
     buf: &mut Buffer,
     area: Rect,
     theme: &Theme,
     name: &str,
+    name_width: usize,
     detail: &str,
     dim_detail: bool,
     selected: bool,
@@ -542,9 +597,11 @@ fn render_provider_row(
     let marker = if selected { "\u{203a} " } else { "  " };
     let line = Line::from(vec![
         Span::styled(marker, name_style),
-        Span::styled(format!("{name:<24}"), name_style),
+        Span::styled(format!("{name:<name_width$}"), name_style),
+        Span::styled("  ", Style::default()),
         Span::styled(detail.to_string(), detail_style),
     ]);
+    let line = crate::render::line_utils::truncate_line(line, area.width as usize);
     buf.set_line(area.x, area.y, &line, area.width);
 }
 
@@ -562,6 +619,7 @@ pub fn render_provider_manager_content(area: Rect, buf: &mut Buffer, state: &Pro
         ProviderMode::NamingAccount { .. } => 3,
         ProviderMode::ConfirmRemove { .. } => 2,
         ProviderMode::OfferDefaultModel { .. } => 2,
+        ProviderMode::SigningIn { .. } => 2,
         ProviderMode::Browse => 0,
     };
     let [list_area, notice_area, detail_area] = Layout::vertical([
@@ -571,7 +629,17 @@ pub fn render_provider_manager_content(area: Rect, buf: &mut Buffer, state: &Pro
     ])
     .areas(area);
 
-    render_row_list(list_area, buf, &theme, state);
+    if list_area.width >= 4 && list_area.height >= 3 {
+        let list_block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(theme.gray_dim))
+            .padding(Padding::horizontal(1));
+        let list_inner = list_block.inner(list_area);
+        list_block.render(list_area, buf);
+        render_row_list(list_inner, buf, &theme, state);
+    } else {
+        render_row_list(list_area, buf, &theme, state);
+    }
 
     if let Some((message, is_error)) = &state.notice {
         let color = if *is_error {
@@ -592,6 +660,12 @@ pub fn render_provider_manager_content(area: Rect, buf: &mut Buffer, state: &Pro
 fn render_row_list(area: Rect, buf: &mut Buffer, theme: &Theme, state: &ProviderManagerState) {
     match state.tab {
         ProviderTab::Providers => {
+            let name_width = state
+                .providers
+                .iter()
+                .map(|row| cols(&row.info.name))
+                .max()
+                .unwrap_or(0);
             for (i, row) in state.providers.iter().enumerate() {
                 let y = area.y + i as u16;
                 if y >= area.y + area.height {
@@ -603,6 +677,7 @@ fn render_row_list(area: Rect, buf: &mut Buffer, theme: &Theme, state: &Provider
                     Rect::new(area.x, y, area.width, 1),
                     theme,
                     &row.info.name,
+                    name_width,
                     badge,
                     dim,
                     i == state.selected,
@@ -625,6 +700,12 @@ fn render_row_list(area: Rect, buf: &mut Buffer, theme: &Theme, state: &Provider
                 .render(area, buf);
                 return;
             }
+            let name_width = state
+                .accounts
+                .iter()
+                .map(|row| cols(&row.name))
+                .max()
+                .unwrap_or(0);
             for (i, row) in state.accounts.iter().enumerate() {
                 let y = area.y + i as u16;
                 if y >= area.y + area.height {
@@ -647,6 +728,7 @@ fn render_row_list(area: Rect, buf: &mut Buffer, theme: &Theme, state: &Provider
                     Rect::new(area.x, y, area.width, 1),
                     theme,
                     &row.name,
+                    name_width,
                     &detail,
                     dim,
                     i == state.selected,
@@ -756,6 +838,15 @@ fn render_mode_detail(area: Rect, buf: &mut Buffer, theme: &Theme, state: &Provi
             )))
             .render(area, buf);
         }
+        ProviderMode::SigningIn { provider_name, .. } => {
+            let text =
+                format!("Signing in with {provider_name}\u{2026} complete it in your browser.");
+            Paragraph::new(Line::from(Span::styled(
+                text,
+                Style::default().fg(theme.gray_bright),
+            )))
+            .render(area, buf);
+        }
     }
 }
 
@@ -814,6 +905,7 @@ pub fn provider_manager_shortcuts(state: &ProviderManagerState) -> Vec<Shortcut<
             },
         ],
         ProviderMode::Verifying { .. } => vec![],
+        ProviderMode::SigningIn { .. } => vec![],
         ProviderMode::NamingAccount { .. } => vec![
             Shortcut {
                 label: "enter continue",

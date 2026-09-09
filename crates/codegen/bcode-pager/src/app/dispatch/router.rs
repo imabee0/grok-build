@@ -1187,6 +1187,9 @@ pub(crate) fn dispatch(action: Action, app: &mut AppView) -> Vec<Effect> {
         Action::ProviderManagerSetDefaultModel(model_id) => {
             super::auth::dispatch_provider_manager_set_default_model(app, model_id)
         }
+        Action::ProviderManagerOAuthLogin { provider_id } => {
+            super::auth::dispatch_provider_manager_oauth_login(provider_id)
+        }
         Action::ProviderManagerReady => super::auth::dispatch_provider_manager_ready(app),
         Action::ProviderManagerDismissDefaultOffer => {
             super::auth::dispatch_provider_manager_dismiss_default_offer(app)

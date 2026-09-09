@@ -23,7 +23,7 @@ use std::path::Path;
 
 use super::accounts;
 use super::model::{AuthMode, BcodeAuth, is_expired_with_buffer};
-use super::oidc::{OidcRefreshResult, oidc_token_exchange};
+use super::oidc::{OidcRefreshResult, chatgpt_refresh, oidc_token_exchange};
 
 /// Pre-refresh margin: treat a token as due for refresh this long before it
 /// actually expires. Matches `auth_provider.rs`'s
@@ -167,12 +167,27 @@ impl ProviderOAuthRef {
         self.refresh_and_persist(bcode_home, auth).await.rotated()
     }
 
+    /// The provider's ChatGPT-profile OAuth app, when the catalog says this
+    /// provider signs in that way. `None` for plain-key providers and for any
+    /// generic OIDC app.
+    fn chatgpt_auth(&self) -> Option<&'static bcode_models::ProviderAuth> {
+        let info = bcode_models::provider(&self.provider_id)?;
+        match info.auth.as_ref() {
+            Some(a) if a.profile == bcode_models::ProviderOAuthProfile::Chatgpt => Some(a),
+            _ => None,
+        }
+    }
+
     async fn refresh_and_persist(
         &self,
         bcode_home: &Path,
         auth: BcodeAuth,
     ) -> ProviderOAuthOutcome {
-        match oidc_token_exchange(&auth).await {
+        let result = match self.chatgpt_auth() {
+            Some(provider_auth) => chatgpt_refresh(&auth, provider_auth).await,
+            None => oidc_token_exchange(&auth).await,
+        };
+        match result {
             OidcRefreshResult::Success(new_auth) => {
                 let key = new_auth.key.clone();
                 if let Err(e) =

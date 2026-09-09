@@ -934,6 +934,10 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
         TaskResult::ProviderDefaultModelPersisted { result } => {
             super::auth::handle_provider_default_model_persisted(app, result)
         }
+        TaskResult::ProviderOAuthLoginDone {
+            provider_id,
+            result,
+        } => super::auth::handle_provider_oauth_login_done(app, provider_id, result),
         TaskResult::AuthFailed { request_seq, error } => {
             if let AuthState::Authenticating {
                 request_seq: current_seq,

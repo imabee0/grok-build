@@ -49,7 +49,32 @@
       "base_url": "https://api.openai.com/v1",
       "env_key": "OPENAI_API_KEY",
       "default_model": "gpt-5.6-terra",
-      "api_key_url": "https://platform.openai.com/api-keys"
+      "api_key_url": "https://platform.openai.com/api-keys",
+      "auth": {
+        "issuer": "https://auth.openai.com",
+        "client_id": "app_EMoamEEZ73f0CkXaXp7hrann",
+        "scopes": [
+          "openid",
+          "profile",
+          "email",
+          "offline_access",
+          "api.connectors.read",
+          "api.connectors.invoke"
+        ],
+        "redirect_ports": [1455, 1457],
+        "profile": "chatgpt",
+        "authorize_path": "/oauth/authorize",
+        "token_path": "/oauth/token",
+        "redirect_host": "localhost",
+        "redirect_path": "/auth/callback",
+        "authorize_extra": {
+          "id_token_add_organizations": "true",
+          "codex_cli_simplified_flow": "true",
+          "originator": "bcode"
+        },
+        "requested_token": "openai-api-key",
+        "json_refresh": true
+      }
     },
     {
       "id": "xai",

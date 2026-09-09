@@ -632,6 +632,11 @@ pub enum Action {
     /// First-run (no session yet) persists directly; mid-session forwards
     /// into [`Self::SetDefaultModel`]'s full switch+persist+toast path.
     ProviderManagerSetDefaultModel(String),
+    /// Start a browser-based OAuth sign-in for this provider from the in-TUI
+    /// provider manager (it has an `auth` entry in the catalog).
+    ProviderManagerOAuthLogin {
+        provider_id: String,
+    },
     /// A credential now resolves and the provider manager was first-run:
     /// finish authentication and start a session, exactly like a successful
     /// `authenticate()` round trip.
@@ -1961,6 +1966,13 @@ pub enum Effect {
     RemoveProviderCredential {
         target: crate::views::provider_manager::KeyTarget,
     },
+    /// Run a provider's browser-based OAuth sign-in
+    /// (`bcode_shell::auth::oidc::run_provider_oauth_login`) and store the
+    /// resulting credential under `provider::<id>`.
+    ProviderOAuthLogin {
+        provider_id: String,
+        provider_name: String,
+    },
     /// Persist `model_id` as `models.default` with no active session to route
     /// an ACP model-switch through (the in-TUI provider manager's first-run path).
     PersistProviderDefaultModel { model_id: String },
@@ -2865,6 +2877,11 @@ pub enum TaskResult {
     /// A provider manager first-run default-model persist finished.
     ProviderDefaultModelPersisted {
         result: Result<String, String>,
+    },
+    /// A provider browser-based OAuth sign-in finished.
+    ProviderOAuthLoginDone {
+        provider_id: String,
+        result: Result<(), String>,
     },
     /// Best-effort `bcode.invalid/auth/cancel` finished (no UI update; state already left Authenticating).
     AuthCancelComplete,

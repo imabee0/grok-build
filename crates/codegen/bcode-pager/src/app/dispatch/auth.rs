@@ -487,6 +487,45 @@ pub(super) fn dispatch_provider_manager_remove_key(
     vec![Effect::RemoveProviderCredential { target }]
 }
 
+/// Start a browser-based OAuth sign-in for a catalog provider that has an
+/// `auth` entry (e.g. ChatGPT). No-op for a provider with no OAuth app.
+pub(super) fn dispatch_provider_manager_oauth_login(provider_id: String) -> Vec<Effect> {
+    let Some(info) = bcode_models::provider(&provider_id) else {
+        return vec![];
+    };
+    if info.auth.is_none() {
+        return vec![];
+    }
+    vec![Effect::ProviderOAuthLogin {
+        provider_id,
+        provider_name: info.name.clone(),
+    }]
+}
+
+/// A provider OAuth sign-in finished: reload the manager's statuses and, for
+/// an auth-gated manager with a now-usable credential, finish authentication.
+pub(super) fn handle_provider_oauth_login_done(
+    app: &mut AppView,
+    provider_id: String,
+    result: Result<(), String>,
+) -> Vec<Effect> {
+    let home = bcode_dirs::bcode_home();
+    let Some(state) = app.provider_setup.as_mut() else {
+        return vec![];
+    };
+    state.finish_oauth(&home, &provider_id, result);
+    if state.auth_gated
+        && matches!(
+            state.mode,
+            crate::views::provider_manager::ProviderMode::Browse
+        )
+        && state.has_any_usable_credential()
+    {
+        return dispatch(Action::ProviderManagerReady, app);
+    }
+    vec![]
+}
+
 /// `m` in the provider manager. Mid-session (an agent is active), this is a
 /// real model switch: forward into [`Action::SetDefaultModel`]'s full
 /// switch+persist+toast path. First-run has no session to switch, so it

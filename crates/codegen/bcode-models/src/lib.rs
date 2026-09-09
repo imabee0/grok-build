@@ -76,6 +76,53 @@ pub struct ProviderAuth {
     /// bearer token (e.g. an account-id header), sent verbatim.
     #[serde(default)]
     pub inference_headers: std::collections::BTreeMap<String, String>,
+    /// Which protocol the sign-in and refresh run. `Oidc` (the default) is
+    /// discovery-driven; `Chatgpt` uses hardcoded endpoint paths plus a
+    /// post-login token-exchange that mints the API-usable key.
+    #[serde(default)]
+    pub profile: ProviderOAuthProfile,
+    /// Authorization endpoint path under `issuer` (e.g. "/oauth/authorize").
+    /// Unused by the discovery-driven `Oidc` profile.
+    #[serde(default)]
+    pub authorize_path: Option<String>,
+    /// Token endpoint path under `issuer` (e.g. "/oauth/token"). Unused by the
+    /// discovery-driven `Oidc` profile.
+    #[serde(default)]
+    pub token_path: Option<String>,
+    /// Loopback host used in the redirect_uri. Defaults to "127.0.0.1"; the
+    /// ChatGPT app pre-registers "localhost" instead.
+    #[serde(default)]
+    pub redirect_host: Option<String>,
+    /// Callback path on the loopback host. Defaults to "/callback"; the
+    /// ChatGPT app pre-registers "/auth/callback".
+    #[serde(default)]
+    pub redirect_path: Option<String>,
+    /// Extra query params appended to the authorize URL verbatim (e.g.
+    /// `id_token_add_organizations=true`).
+    #[serde(default)]
+    pub authorize_extra: std::collections::BTreeMap<String, String>,
+    /// Token-exchange `requested_token` value (e.g. "openai-api-key"). When
+    /// set, the login's id_token is exchanged for this token type, which
+    /// becomes the stored credential key.
+    #[serde(default)]
+    pub requested_token: Option<String>,
+    /// Refresh uses a JSON body (`true`, ChatGPT) instead of form encoding
+    /// (`false`, standard OAuth2 refresh_token grant).
+    #[serde(default)]
+    pub json_refresh: bool,
+}
+
+/// The OAuth protocol a provider's sign-in and refresh run.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderOAuthProfile {
+    /// Standard OIDC: discovery-driven endpoints, `refresh_token` grant via
+    /// form encoding, access token is the credential key.
+    #[default]
+    Oidc,
+    /// ChatGPT: hardcoded `/oauth/authorize` + `/oauth/token`, a post-login
+    /// token-exchange that mints the API key, and JSON refresh.
+    Chatgpt,
 }
 
 static DEFAULTS: LazyLock<DefaultModels> = LazyLock::new(|| {

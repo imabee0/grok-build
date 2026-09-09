@@ -3321,6 +3321,9 @@ fn handle_welcome_input(ev: &Event, ctx: &mut WelcomeInputCtx<'_>) -> InputOutco
             ProviderManagerOutcome::SetDefaultModel(model_id) => {
                 InputOutcome::Action(Action::ProviderManagerSetDefaultModel(model_id))
             }
+            ProviderManagerOutcome::OAuthLogin { provider_id } => {
+                InputOutcome::Action(Action::ProviderManagerOAuthLogin { provider_id })
+            }
             ProviderManagerOutcome::DismissDefaultOffer => {
                 InputOutcome::Action(Action::ProviderManagerDismissDefaultOffer)
             }

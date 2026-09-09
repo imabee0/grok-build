@@ -68,6 +68,16 @@ pub async fn run(config: &bcode_shell::agent::config::Config, args: LoginArgs) -
         Some(id) => lookup_provider(&id)?,
         None => pick_provider_interactively()?,
     };
+    // A provider with its own OAuth app (e.g. ChatGPT sign-in) has no API key
+    // to paste: run the loopback-browser flow instead of the stdin key wizard.
+    // `--account`/`--from-env` don't apply to it.
+    if let Some(auth) = provider.auth.as_ref() {
+        bcode_shell::auth::oidc::run_provider_oauth_login(&provider.id, &provider.name, auth, None)
+            .await?;
+        println!();
+        offer_default_model(&provider);
+        return Ok(());
+    }
     let key = match args.from_env.as_deref() {
         Some(var) => {
             std::env::var(var).with_context(|| format!("environment variable {var} is not set"))?
