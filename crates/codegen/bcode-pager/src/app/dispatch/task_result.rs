@@ -924,6 +924,20 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
         TaskResult::AuthComplete { request_seq, meta } => {
             handle_auth_complete(app, request_seq, meta)
         }
+        TaskResult::ProviderCredentialStored {
+            target,
+            verify_result,
+        } => super::auth::handle_provider_credential_stored(app, target, verify_result),
+        TaskResult::ProviderCredentialRemoved { target, result } => {
+            super::auth::handle_provider_credential_removed(app, target, result)
+        }
+        TaskResult::ProviderDefaultModelPersisted { result } => {
+            super::auth::handle_provider_default_model_persisted(app, result)
+        }
+        TaskResult::ProviderOAuthLoginDone {
+            provider_id,
+            result,
+        } => super::auth::handle_provider_oauth_login_done(app, provider_id, result),
         TaskResult::AuthFailed { request_seq, error } => {
             if let AuthState::Authenticating {
                 request_seq: current_seq,

@@ -1175,6 +1175,25 @@ pub(crate) fn dispatch(action: Action, app: &mut AppView) -> Vec<Effect> {
             vec![]
         }
         Action::Login => dispatch_login(app),
+        Action::OpenProviderManager => super::auth::dispatch_open_provider_manager(app),
+        Action::ProviderManagerChanged => vec![],
+        Action::ProviderManagerClose => super::auth::dispatch_provider_manager_close(app),
+        Action::ProviderManagerStoreKey { target, key } => {
+            super::auth::dispatch_provider_manager_store_key(target, key)
+        }
+        Action::ProviderManagerRemoveKey { target } => {
+            super::auth::dispatch_provider_manager_remove_key(target)
+        }
+        Action::ProviderManagerSetDefaultModel(model_id) => {
+            super::auth::dispatch_provider_manager_set_default_model(app, model_id)
+        }
+        Action::ProviderManagerOAuthLogin { provider_id } => {
+            super::auth::dispatch_provider_manager_oauth_login(provider_id)
+        }
+        Action::ProviderManagerReady => super::auth::dispatch_provider_manager_ready(app),
+        Action::ProviderManagerDismissDefaultOffer => {
+            super::auth::dispatch_provider_manager_dismiss_default_offer(app)
+        }
         Action::CancelLogin => dispatch_cancel_login(app),
         Action::SubmitAuthCode(code) => dispatch_submit_auth_code(app, code),
         Action::CopyAuthUrl => {

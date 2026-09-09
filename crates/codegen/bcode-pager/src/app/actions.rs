@@ -607,6 +607,44 @@ pub enum Action {
     SwitchAccount,
     /// User pressed login on the welcome screen.
     Login,
+    /// Open the in-TUI provider manager mid-session (`/providers`, or the
+    /// palette entry). `/login` stays routed through [`Self::Login`] --
+    /// this is the always-available management surface, not the login gate.
+    OpenProviderManager,
+    /// A key event was routed to `app.provider_setup` (the welcome-screen
+    /// provider manager) and produced a redraw-only outcome. Effectful
+    /// outcomes (store/remove/ready) get their own variants below.
+    ProviderManagerChanged,
+    /// Close `app.provider_setup` (mid-session only; first-run has nowhere
+    /// else to go and never emits this).
+    ProviderManagerClose,
+    /// Persist `key` for `target` from the in-TUI provider manager, then --
+    /// for a provider target -- verify it against the provider's own API.
+    ProviderManagerStoreKey {
+        target: crate::views::provider_manager::KeyTarget,
+        key: String,
+    },
+    /// Remove a stored credential for `target` from the in-TUI provider manager.
+    ProviderManagerRemoveKey {
+        target: crate::views::provider_manager::KeyTarget,
+    },
+    /// Set `model_id` as the default model from the in-TUI provider manager.
+    /// First-run (no session yet) persists directly; mid-session forwards
+    /// into [`Self::SetDefaultModel`]'s full switch+persist+toast path.
+    ProviderManagerSetDefaultModel(String),
+    /// Start a browser-based OAuth sign-in for this provider from the in-TUI
+    /// provider manager (it has an `auth` entry in the catalog).
+    ProviderManagerOAuthLogin {
+        provider_id: String,
+    },
+    /// A credential now resolves and the provider manager was first-run:
+    /// finish authentication and start a session, exactly like a successful
+    /// `authenticate()` round trip.
+    ProviderManagerReady,
+    /// The user declined the post-setup default-model offer. The credential
+    /// still resolves, so this finishes authentication exactly like
+    /// [`Self::ProviderManagerReady`] -- only the default-model pick is skipped.
+    ProviderManagerDismissDefaultOffer,
     /// Cancel an in-progress login that was started from inside a session (`/login` or a 401 re-auth prompt) and return to the previous view.
     /// Distinct from `Quit`: abandoning a mid-session re-auth must not exit the app or lose the open session.
     CancelLogin,
@@ -1302,6 +1340,17 @@ pub struct DoctorFixTarget {
     pub session_binding_epoch: u32,
     pub cwd: std::path::PathBuf,
 }
+/// A provider/account key in transit to disk. `Effect` derives `Debug` and
+/// effects are traced, so this carries a manual `Debug` that never prints the
+/// secret -- unlike the plain `String` the provider manager view returns.
+pub struct RedactedKey(pub String);
+
+impl std::fmt::Debug for RedactedKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("<redacted>")
+    }
+}
+
 /// Aftermath of a successful session delete.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AfterSessionDelete {
@@ -1905,6 +1954,28 @@ pub enum Effect {
     },
     /// Log out via `bcode.invalid/auth/logout` (shell clears auth.json and in-memory state).
     Logout,
+    /// Persist `key` for `target` from the in-TUI provider manager
+    /// (`bcode_shell::auth::provider_setup`, `spawn_blocking`), then -- for a
+    /// provider target -- verify it with one `GET {base_url}/models`. The key
+    /// is stored regardless of the verdict.
+    StoreProviderCredential {
+        target: crate::views::provider_manager::KeyTarget,
+        key: RedactedKey,
+    },
+    /// Remove a stored credential for `target` from the in-TUI provider manager.
+    RemoveProviderCredential {
+        target: crate::views::provider_manager::KeyTarget,
+    },
+    /// Run a provider's browser-based OAuth sign-in
+    /// (`bcode_shell::auth::oidc::run_provider_oauth_login`) and store the
+    /// resulting credential under `provider::<id>`.
+    ProviderOAuthLogin {
+        provider_id: String,
+        provider_name: String,
+    },
+    /// Persist `model_id` as `models.default` with no active session to route
+    /// an ACP model-switch through (the in-TUI provider manager's first-run path).
+    PersistProviderDefaultModel { model_id: String },
     /// Cancel an in-flight interactive auth on the shell (`bcode.invalid/auth/cancel`).
     /// Used when the user abandons mid-session `/login` so the device-code poll stops instead of running until the code expires.
     /// `request_seq` scopes the cancel so a delayed RPC cannot tear down a successor login.
@@ -2792,6 +2863,26 @@ pub enum TaskResult {
     },
     /// Shell acknowledged logout (auth cleared).
     LogoutComplete,
+    /// A provider manager credential store finished. `verify_result` is
+    /// `Some` only for a provider target (accounts are not verified).
+    ProviderCredentialStored {
+        target: crate::views::provider_manager::KeyTarget,
+        verify_result: Option<Result<(), String>>,
+    },
+    /// A provider manager credential removal finished.
+    ProviderCredentialRemoved {
+        target: crate::views::provider_manager::KeyTarget,
+        result: Result<bool, String>,
+    },
+    /// A provider manager first-run default-model persist finished.
+    ProviderDefaultModelPersisted {
+        result: Result<String, String>,
+    },
+    /// A provider browser-based OAuth sign-in finished.
+    ProviderOAuthLoginDone {
+        provider_id: String,
+        result: Result<(), String>,
+    },
     /// Best-effort `bcode.invalid/auth/cancel` finished (no UI update; state already left Authenticating).
     AuthCancelComplete,
     /// Shell responded to `bcode.invalid/auth/check_subscription`.
@@ -2954,6 +3045,15 @@ pub enum TaskResult {
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// `Effect` derives `Debug` and effects are traced: a provider/account key
+    /// in transit must never be printable through it.
+    #[test]
+    fn redacted_key_never_appears_in_debug() {
+        let key = RedactedKey("super-secret-value".to_string());
+        let debug = format!("{key:?}");
+        assert_eq!(debug, "<redacted>");
+        assert!(!debug.contains("super-secret-value"));
+    }
     /// `as_canonical` must return the wire strings that the settings picker and dispatcher pattern-match against.
     #[test]
     fn plan_mode_kind_as_canonical() {

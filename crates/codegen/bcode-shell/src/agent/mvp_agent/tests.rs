@@ -2692,6 +2692,7 @@ fn find_model_by_id_prefers_key_then_falls_back_to_slug() {
         env_key: None,
         auth_provider: None,
         account: None,
+        oauth_provider: None,
         api_base_url: None,
     };
     let mut models = indexmap::IndexMap::new();

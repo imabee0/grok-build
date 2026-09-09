@@ -5,6 +5,7 @@ use super::protocol::{OidcError, OidcUserInfo, build_bcode_auth, discover, refre
 use crate::auth::error::RefreshTokenFailedReason;
 
 /// Outcome of a pure OIDC token refresh (no AuthManager mutations).
+#[derive(Debug)]
 pub(crate) enum OidcRefreshResult {
     /// Fresh token obtained. Caller must persist.
     Success(Box<BcodeAuth>),
@@ -71,7 +72,7 @@ impl SuspendProbe {
 
 /// `true` when `err`'s chain shows the request never reached the server: DNS failure, TCP connect failure, or timeout.
 /// Used to mark [`OidcRefreshResult::Failed::network_unreachable`].
-fn is_network_unreachable(err: &anyhow::Error) -> bool {
+pub(super) fn is_network_unreachable(err: &anyhow::Error) -> bool {
     err.chain().any(|cause| {
         cause
             .downcast_ref::<reqwest::Error>()

@@ -48,6 +48,81 @@ pub struct ProviderInfo {
     pub default_model: String,
     /// Where a user without a key yet can go create one.
     pub api_key_url: String,
+    /// OAuth2/OIDC subscription sign-in for this provider, if it offers one.
+    /// Absent for every provider in this file today -- none of them expose a
+    /// public OAuth app for API access, so there is no truthful data to put
+    /// here. The mechanism this drives is proven against the in-tree mock
+    /// IdP; a real entry only belongs here once a provider actually
+    /// publishes real issuer/client-id values.
+    #[serde(default)]
+    pub auth: Option<ProviderAuth>,
+}
+
+/// A provider's own OAuth2/OIDC app for subscription sign-in, independent of
+/// its API-key tier. Every field comes from the provider's own published
+/// values -- never invented -- which is why every provider in this file
+/// leaves this unset.
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub struct ProviderAuth {
+    pub issuer: String,
+    pub client_id: String,
+    #[serde(default)]
+    pub scopes: Vec<String>,
+    /// Loopback ports to try, in order, for the OAuth redirect_uri. Real
+    /// vendors pre-register exact ports rather than accepting any; this list
+    /// must be non-empty whenever `auth` is set.
+    pub redirect_ports: Vec<u16>,
+    /// Extra headers this provider's inference API requires alongside the
+    /// bearer token (e.g. an account-id header), sent verbatim.
+    #[serde(default)]
+    pub inference_headers: std::collections::BTreeMap<String, String>,
+    /// Which protocol the sign-in and refresh run. `Oidc` (the default) is
+    /// discovery-driven; `Chatgpt` uses hardcoded endpoint paths plus a
+    /// post-login token-exchange that mints the API-usable key.
+    #[serde(default)]
+    pub profile: ProviderOAuthProfile,
+    /// Authorization endpoint path under `issuer` (e.g. "/oauth/authorize").
+    /// Unused by the discovery-driven `Oidc` profile.
+    #[serde(default)]
+    pub authorize_path: Option<String>,
+    /// Token endpoint path under `issuer` (e.g. "/oauth/token"). Unused by the
+    /// discovery-driven `Oidc` profile.
+    #[serde(default)]
+    pub token_path: Option<String>,
+    /// Loopback host used in the redirect_uri. Defaults to "127.0.0.1"; the
+    /// ChatGPT app pre-registers "localhost" instead.
+    #[serde(default)]
+    pub redirect_host: Option<String>,
+    /// Callback path on the loopback host. Defaults to "/callback"; the
+    /// ChatGPT app pre-registers "/auth/callback".
+    #[serde(default)]
+    pub redirect_path: Option<String>,
+    /// Extra query params appended to the authorize URL verbatim (e.g.
+    /// `id_token_add_organizations=true`).
+    #[serde(default)]
+    pub authorize_extra: std::collections::BTreeMap<String, String>,
+    /// Token-exchange `requested_token` value (e.g. "openai-api-key"). When
+    /// set, the login's id_token is exchanged for this token type, which
+    /// becomes the stored credential key.
+    #[serde(default)]
+    pub requested_token: Option<String>,
+    /// Refresh uses a JSON body (`true`, ChatGPT) instead of form encoding
+    /// (`false`, standard OAuth2 refresh_token grant).
+    #[serde(default)]
+    pub json_refresh: bool,
+}
+
+/// The OAuth protocol a provider's sign-in and refresh run.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderOAuthProfile {
+    /// Standard OIDC: discovery-driven endpoints, `refresh_token` grant via
+    /// form encoding, access token is the credential key.
+    #[default]
+    Oidc,
+    /// ChatGPT: hardcoded `/oauth/authorize` + `/oauth/token`, a post-login
+    /// token-exchange that mints the API key, and JSON refresh.
+    Chatgpt,
 }
 
 static DEFAULTS: LazyLock<DefaultModels> = LazyLock::new(|| {
@@ -78,6 +153,18 @@ static DEFAULTS: LazyLock<DefaultModels> = LazyLock::new(|| {
             provider.id,
             provider.default_model,
         );
+        if let Some(auth) = &provider.auth {
+            assert!(
+                !auth.issuer.trim().is_empty() && !auth.client_id.trim().is_empty(),
+                "default_models.json: provider '{}' has an 'auth' entry with an empty issuer or client_id",
+                provider.id,
+            );
+            assert!(
+                !auth.redirect_ports.is_empty(),
+                "default_models.json: provider '{}' has an 'auth' entry with no redirect_ports",
+                provider.id,
+            );
+        }
     }
 
     defaults

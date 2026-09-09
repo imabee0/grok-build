@@ -318,10 +318,64 @@ pub fn store_provider_key(bcode_home: &Path, id: &str, key: &str) -> std::io::Re
     })
 }
 
+/// Store a full OAuth credential (access + refresh token, expiry, issuer) for
+/// provider `id`, replacing any previous credential. What
+/// `crate::auth::oidc::run_provider_oauth_login` writes on a fresh sign-in,
+/// and what [`crate::auth::provider_oauth::ProviderOAuthRef`] writes back
+/// after a background refresh. Distinct from [`store_provider_key`] only in
+/// that it keeps `auth.auth_mode` (expected `AuthMode::Oidc`) and the OIDC
+/// fields instead of collapsing to a bare `ApiKey` record.
+pub fn store_provider_oauth(bcode_home: &Path, id: &str, auth: BcodeAuth) -> std::io::Result<()> {
+    store_scoped_auth(bcode_home, &provider_scope(id), auth).map_err(|_| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!(
+                "invalid provider id {id:?}: letters, digits, '_', '-' and '.', \
+                 up to {MAX_ACCOUNT_NAME} characters, not starting with '.'"
+            ),
+        )
+    })
+}
+
+/// The full stored credential for provider `id`, if any -- unlike
+/// [`read_provider_key`], keeps `auth_mode`/`refresh_token`/`expires_at`/
+/// `oidc_issuer`/`oidc_client_id` so a caller can tell an OAuth credential
+/// from a plain API key and refresh it.
+pub fn read_provider_auth(bcode_home: &Path, id: &str) -> Option<BcodeAuth> {
+    if !is_valid_provider_id(id) {
+        return None;
+    }
+    let store = read_auth_json(&auth_json(bcode_home)).ok()?;
+    store
+        .get(&provider_scope(id))
+        .filter(|auth| !auth.key.trim().is_empty())
+        .cloned()
+}
+
+/// Shared write path for both scopes: build a plain `ApiKey` record and
+/// delegate to [`store_scoped_auth`].
+fn store_scoped_key(bcode_home: &Path, scope: &str, key: &str) -> std::io::Result<()> {
+    if key.trim().is_empty() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "refusing to store an empty credential",
+        ));
+    }
+    store_scoped_auth(
+        bcode_home,
+        scope,
+        BcodeAuth {
+            key: key.to_owned(),
+            auth_mode: AuthMode::ApiKey,
+            ..Default::default()
+        },
+    )
+}
+
 /// Shared write path for both scopes: validate the scope's own name/id
 /// (embedded in `scope`, checked by the caller before formatting it) is
 /// unreachable here, so this validates the whole scope string is one of ours.
-fn store_scoped_key(bcode_home: &Path, scope: &str, key: &str) -> std::io::Result<()> {
+fn store_scoped_auth(bcode_home: &Path, scope: &str, auth: BcodeAuth) -> std::io::Result<()> {
     let is_valid = scope
         .strip_prefix(ACCOUNT_SCOPE_PREFIX)
         .map(is_valid_account_name)
@@ -337,7 +391,7 @@ fn store_scoped_key(bcode_home: &Path, scope: &str, key: &str) -> std::io::Resul
             "invalid scope",
         ));
     }
-    if key.trim().is_empty() {
+    if auth.key.trim().is_empty() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
             "refusing to store an empty credential",
@@ -345,14 +399,7 @@ fn store_scoped_key(bcode_home: &Path, scope: &str, key: &str) -> std::io::Resul
     }
     let path = auth_json(bcode_home);
     let mut store = read_auth_json_or_empty_recovering_corrupt(&path)?;
-    store.insert(
-        scope.to_owned(),
-        BcodeAuth {
-            key: key.to_owned(),
-            auth_mode: AuthMode::ApiKey,
-            ..Default::default()
-        },
-    );
+    store.insert(scope.to_owned(), auth);
     write_auth_json(&path, &store)
 }
 

@@ -1062,6 +1062,11 @@ pub struct AppView {
     pub login_label: Option<String>,
     /// The auth method ID to use for login.
     pub login_method_id: Option<acp::AuthMethodId>,
+    /// The in-TUI provider credential manager. `Some` while `AuthState::Pending`
+    /// is showing it instead of the (now unreachable) "Login with bcode" menu --
+    /// set when [`bcode_shell::agent::auth_method::AuthMethodKind::ProviderSetup`]
+    /// is the advertised method (bcode has no account of its own).
+    pub provider_setup: Option<crate::views::provider_manager::ProviderManagerState>,
     /// Initial auth mode hint from method metadata.
     pub auth_start_mode: AuthMode,
     /// Text buffer for manual auth token paste (loopback mode).
@@ -1576,6 +1581,7 @@ impl AppView {
             account_email: None,
             login_label: None,
             login_method_id: None,
+            provider_setup: None,
             auth_start_mode: AuthMode::Pending,
             auth_code_input: LineEditor::default(),
             next_auth_request_seq: 1,
@@ -2521,6 +2527,7 @@ impl AppView {
                     prompt: &mut self.welcome_prompt,
                     prompt_focused: &mut self.welcome_prompt_focused,
                     new_worktree_dialog: &mut self.new_worktree_dialog,
+                    provider_setup: &mut self.provider_setup,
                     menu_index: &mut self.welcome_menu_index,
                     menu_rects: &self.welcome_menu_rects,
                     menu_count: if zdr_blocked {
@@ -3144,6 +3151,7 @@ struct WelcomeInputCtx<'a> {
     prompt: &'a mut PromptWidget,
     prompt_focused: &'a mut bool,
     new_worktree_dialog: &'a mut Option<NewWorktreeDialogState>,
+    provider_setup: &'a mut Option<crate::views::provider_manager::ProviderManagerState>,
     menu_index: &'a mut Option<usize>,
     menu_rects: &'a [ratatui::layout::Rect],
     menu_count: usize,
@@ -3290,6 +3298,36 @@ fn handle_welcome_input(ev: &Event, ctx: &mut WelcomeInputCtx<'_>) -> InputOutco
             }
         }
         return InputOutcome::Unchanged;
+    }
+    if let Some(state) = ctx.provider_setup.as_mut() {
+        use crate::views::provider_manager::ProviderManagerOutcome;
+        let outcome = match ev {
+            Event::Key(key) if key.kind != crossterm::event::KeyEventKind::Release => {
+                state.handle_key(key)
+            }
+            Event::Resize(_, _) => return InputOutcome::Changed,
+            _ => ProviderManagerOutcome::Unchanged,
+        };
+        return match outcome {
+            ProviderManagerOutcome::Unchanged => InputOutcome::Unchanged,
+            ProviderManagerOutcome::Changed => InputOutcome::Changed,
+            ProviderManagerOutcome::Close => InputOutcome::Action(Action::ProviderManagerClose),
+            ProviderManagerOutcome::StoreKey { target, key } => {
+                InputOutcome::Action(Action::ProviderManagerStoreKey { target, key })
+            }
+            ProviderManagerOutcome::RemoveKey { target } => {
+                InputOutcome::Action(Action::ProviderManagerRemoveKey { target })
+            }
+            ProviderManagerOutcome::SetDefaultModel(model_id) => {
+                InputOutcome::Action(Action::ProviderManagerSetDefaultModel(model_id))
+            }
+            ProviderManagerOutcome::OAuthLogin { provider_id } => {
+                InputOutcome::Action(Action::ProviderManagerOAuthLogin { provider_id })
+            }
+            ProviderManagerOutcome::DismissDefaultOffer => {
+                InputOutcome::Action(Action::ProviderManagerDismissDefaultOffer)
+            }
+        };
     }
     if let Some(dialog) = ctx.new_worktree_dialog.as_mut() {
         let outcome = match ev {
@@ -4550,6 +4588,7 @@ impl AppView {
                             consent_state: &self.consent_state,
                             consent_hover_link: self.welcome_consent_hover_link,
                             login_label: self.login_label.as_deref(),
+                            provider_setup: self.provider_setup.as_ref(),
                             auth_code_input: self.auth_code_input.text(),
                             auth_code_cursor_byte: self.auth_code_input.cursor_byte(),
                             clipboard_delivery: self.auth_clipboard_delivery,

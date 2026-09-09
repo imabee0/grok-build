@@ -163,6 +163,7 @@ async fn session_token_actor(
                 auth_scheme: Default::default(),
             },
             provider: None,
+            oauth_provider: None,
         }));
 
     actor

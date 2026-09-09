@@ -108,6 +108,129 @@ pub(crate) fn execute(
                     TaskResult::LogoutComplete
                 });
         }
+        Effect::StoreProviderCredential { target, key } => {
+            let key = key.0;
+            tasks.spawn(async move {
+                use crate::views::provider_manager::KeyTarget;
+                let home = bcode_dirs::bcode_home();
+                let write_target = target.clone();
+                let write_key = key.clone();
+                let store_result = tokio::task::spawn_blocking(move || match &write_target {
+                    KeyTarget::Provider(id) => {
+                        bcode_shell::auth::provider_setup::store_provider_credential(
+                            &home, id, &write_key,
+                        )
+                        .map_err(|e| e.to_string())
+                    }
+                    KeyTarget::Account(name) => {
+                        bcode_shell::auth::provider_setup::store_account_credential(
+                            &home, name, &write_key,
+                        )
+                        .map_err(|e| e.to_string())
+                    }
+                })
+                .await
+                .unwrap_or_else(|e| Err(format!("internal error: {e}")));
+
+                match store_result {
+                    Err(e) => TaskResult::ProviderCredentialStored {
+                        target,
+                        verify_result: Some(Err(e)),
+                    },
+                    Ok(()) => {
+                        let base_url = match &target {
+                            KeyTarget::Provider(id) => {
+                                bcode_models::provider(id).map(|info| info.base_url.clone())
+                            }
+                            KeyTarget::Account(_) => None,
+                        };
+                        let verify_result = match base_url {
+                            Some(base_url) => Some(
+                                bcode_shell::auth::provider_setup::verify_provider_key(
+                                    &base_url, &key,
+                                )
+                                .await,
+                            ),
+                            None => None,
+                        };
+                        TaskResult::ProviderCredentialStored { target, verify_result }
+                    }
+                }
+            });
+        }
+        Effect::RemoveProviderCredential { target } => {
+            tasks.spawn(async move {
+                use crate::views::provider_manager::KeyTarget;
+                let home = bcode_dirs::bcode_home();
+                let remove_target = target.clone();
+                let result = tokio::task::spawn_blocking(move || match &remove_target {
+                    KeyTarget::Provider(id) => {
+                        bcode_shell::auth::provider_setup::remove_provider_credential(&home, id)
+                            .map_err(|e| e.to_string())
+                    }
+                    KeyTarget::Account(name) => {
+                        bcode_shell::auth::provider_setup::remove_account_credential(&home, name)
+                            .map_err(|e| e.to_string())
+                    }
+                })
+                .await
+                .unwrap_or_else(|e| Err(format!("internal error: {e}")));
+                TaskResult::ProviderCredentialRemoved { target, result }
+            });
+        }
+        Effect::PersistProviderDefaultModel { model_id } => {
+            tasks.spawn(async move {
+                let result = bcode_shell::util::config::set_default_model(model_id.clone())
+                    .await
+                    .map(|()| model_id)
+                    .map_err(|e| e.to_string());
+                TaskResult::ProviderDefaultModelPersisted { result }
+            });
+        }
+        Effect::ProviderOAuthLogin {
+            provider_id,
+            provider_name,
+        } => {
+            match bcode_models::provider(&provider_id).and_then(|info| info.auth.as_ref()) {
+                None => {
+                    tasks.spawn(async move {
+                        TaskResult::ProviderOAuthLoginDone {
+                            provider_id,
+                            result: Err("provider has no OAuth sign-in configured".to_string()),
+                        }
+                    });
+                }
+                Some(auth) => {
+                    let (url_tx, url_rx) =
+                        tokio::sync::oneshot::channel::<bcode_shell::auth::AuthUrlInfo>();
+                    let (_code_tx, code_rx) = tokio::sync::mpsc::channel::<String>(1);
+                    // The browser opens automatically; the loopback callback
+                    // completes the flow. The URL receiver is dropped (no
+                    // in-modal URL surface), and the paste channel is held open
+                    // so the loopback race stays the only completion path.
+                    drop(url_rx);
+                    let channels = bcode_shell::auth::AuthChannels {
+                        url_tx: Some(url_tx),
+                        code_rx,
+                    };
+                    tasks.spawn(async move {
+                        let result = bcode_shell::auth::oidc::run_provider_oauth_login(
+                            &provider_id,
+                            &provider_name,
+                            auth,
+                            Some(channels),
+                        )
+                        .await
+                        .map(|_| ())
+                        .map_err(|e| e.to_string());
+                        TaskResult::ProviderOAuthLoginDone {
+                            provider_id,
+                            result,
+                        }
+                    });
+                }
+            }
+        }
         Effect::CancelAuth { request_seq } => {
             let tx = acp_tx.clone();
             tasks.spawn(async move { send_auth_cancel(&tx, request_seq).await });

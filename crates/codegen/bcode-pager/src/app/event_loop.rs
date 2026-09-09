@@ -399,19 +399,6 @@ fn seed_trust_state(app: &mut AppView, remote: Option<&bcode_shell::util::config
     };
 }
 
-/// The welcome-screen message shown in place of an auto-opened browser when the
-/// only advertised login is the built-in bcode.invalid backend with nothing
-/// real behind it (no enterprise OIDC, no external auth-provider command).
-/// bcode has no backend of its own to sign into -- the catalog's providers do.
-pub(crate) fn provider_sign_in_hint() -> String {
-    let mut hint = String::from("Sign in to a provider:\n");
-    for p in bcode_models::providers() {
-        hint.push_str(&format!("  {}\n", p.name));
-    }
-    hint.push_str("\nRun `bcode login` in a terminal to sign in.");
-    hint
-}
-
 /// Must run before the first render, or the startup-intent block opens a session behind the gate and the first frame shows the normal welcome.
 pub(crate) fn seed_consent_state_from_gate(
     app: &mut AppView,
@@ -1369,10 +1356,15 @@ pub(crate) async fn run(
             // external auth-provider command configured -- bcode has no
             // backend of its own to sign in to. Auto-opening a browser here
             // would open a tab at a host that cannot resolve.
-            // Show the provider list instead of hanging on "waiting for login".
-            app.auth_state = super::app_view::AuthState::Pending {
-                error: Some(provider_sign_in_hint()),
-            };
+            // Open the in-TUI provider manager instead of hanging on "waiting for login".
+            app.login_label = None;
+            app.login_method_id = None;
+            app.provider_setup = Some(
+                crate::views::provider_manager::ProviderManagerState::first_run(
+                    &bcode_dirs::bcode_home(),
+                ),
+            );
+            app.auth_state = super::app_view::AuthState::Pending { error: None };
             vec![]
         } else {
             dispatch::dispatch(Action::Login, &mut app)

@@ -2,16 +2,18 @@
 //!
 //! bcode has no backend of its own to sign into -- the catalog's providers do.
 //! With no `--oauth`/`--device-auth` flag (enterprise SSO, unchanged), this is
-//! a small wizard over the same primitives `bcode account` already exposes:
-//! pick a provider from the catalog, read its key off stdin, store it at the
-//! `provider::<id>` scope in `auth.json` (`bcode-shell`'s
-//! [`bcode_shell::auth::accounts::store_provider_key`]) so every model on that
-//! provider works with nothing written to `config.toml`.
+//! a small stdin wizard over [`bcode_shell::auth::provider_setup`], the same
+//! credential policy the in-TUI provider manager uses: pick a provider from
+//! the catalog, read its key off stdin, store it at the `provider::<id>`
+//! scope in `auth.json` so every model on that provider works with nothing
+//! written to `config.toml`. The CLI and the TUI call the same policy layer
+//! so they cannot drift on what counts as a valid id or an empty key.
 
 use std::io::Write;
 
 use anyhow::{Context, Result, bail};
 use bcode_shell::auth::accounts;
+use bcode_shell::auth::provider_setup;
 
 #[derive(Debug, clap::Args, Clone)]
 pub struct LoginArgs {
@@ -66,6 +68,16 @@ pub async fn run(config: &bcode_shell::agent::config::Config, args: LoginArgs) -
         Some(id) => lookup_provider(&id)?,
         None => pick_provider_interactively()?,
     };
+    // A provider with its own OAuth app (e.g. ChatGPT sign-in) has no API key
+    // to paste: run the loopback-browser flow instead of the stdin key wizard.
+    // `--account`/`--from-env` don't apply to it.
+    if let Some(auth) = provider.auth.as_ref() {
+        bcode_shell::auth::oidc::run_provider_oauth_login(&provider.id, &provider.name, auth, None)
+            .await?;
+        println!();
+        offer_default_model(&provider);
+        return Ok(());
+    }
     let key = match args.from_env.as_deref() {
         Some(var) => {
             std::env::var(var).with_context(|| format!("environment variable {var} is not set"))?
@@ -81,13 +93,7 @@ pub async fn run(config: &bcode_shell::agent::config::Config, args: LoginArgs) -
     }
     match args.account.as_deref() {
         Some(account) => {
-            if !accounts::is_valid_account_name(account) {
-                bail!(
-                    "invalid account name {account:?}: letters, digits, '_', '-' and '.' only, \
-                     not starting with '.'"
-                );
-            }
-            accounts::store_account_key(&home, account, key)
+            provider_setup::store_account_credential(&home, account, key)
                 .with_context(|| format!("failed to store the key for account {account:?}"))?;
             println!(
                 "account {account}: key stored in {}",
@@ -96,9 +102,9 @@ pub async fn run(config: &bcode_shell::agent::config::Config, args: LoginArgs) -
             println!("point a model at it with:\n\n    [model.<id>]\n    account = \"{account}\"");
         }
         None => {
-            accounts::store_provider_key(&home, &provider.id, key).with_context(|| {
-                format!("failed to store the key for provider {:?}", provider.id)
-            })?;
+            provider_setup::store_provider_credential(&home, &provider.id, key).with_context(
+                || format!("failed to store the key for provider {:?}", provider.id),
+            )?;
             println!(
                 "{}: key stored in {} -- every {} model now has a credential",
                 provider.name,
@@ -120,12 +126,12 @@ pub fn run_logout(config: &bcode_shell::agent::config::Config, args: LogoutArgs)
         let home = bcode_shell::util::bcode_home::bcode_home();
         let mut cleared = Vec::new();
         for id in accounts::stored_provider_ids(&home) {
-            if accounts::remove_provider_key(&home, &id).unwrap_or(false) {
+            if provider_setup::remove_provider_credential(&home, &id).unwrap_or(false) {
                 cleared.push(format!("provider {id}"));
             }
         }
         for name in accounts::stored_account_names(&home) {
-            if accounts::remove_account_key(&home, &name).unwrap_or(false) {
+            if provider_setup::remove_account_credential(&home, &name).unwrap_or(false) {
                 cleared.push(format!("account {name}"));
             }
         }
@@ -139,7 +145,7 @@ pub fn run_logout(config: &bcode_shell::agent::config::Config, args: LogoutArgs)
     }
     if let Some(account) = args.account.as_deref() {
         let home = bcode_shell::util::bcode_home::bcode_home();
-        if accounts::remove_account_key(&home, account)
+        if provider_setup::remove_account_credential(&home, account)
             .with_context(|| format!("failed to remove the key for account {account:?}"))?
         {
             println!("account {account}: stored key removed");
@@ -151,7 +157,7 @@ pub fn run_logout(config: &bcode_shell::agent::config::Config, args: LogoutArgs)
     if let Some(provider) = args.provider.as_deref() {
         let home = bcode_shell::util::bcode_home::bcode_home();
         let id = lookup_provider(provider)?.id;
-        if accounts::remove_provider_key(&home, &id)
+        if provider_setup::remove_provider_credential(&home, &id)
             .with_context(|| format!("failed to remove the key for provider {id:?}"))?
         {
             println!("{provider}: stored key removed");

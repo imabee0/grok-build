@@ -18,9 +18,10 @@ use tokio::net::TcpListener;
 use super::super::config::{BcodeComConfig, OidcAuthConfig};
 use super::super::{AuthManager, BcodeAuth};
 use super::protocol::{
-    OidcError, build_authorize_url, build_bcode_auth, discover, enforce_login_principal,
-    exchange_code, extract_user_info, generate_pkce, login_principal_policy,
-    peek_access_token_principal, peek_access_token_principal_id, validate_state,
+    OidcError, OidcUserInfo, TokenResponse, build_authorize_url, build_bcode_auth, discover,
+    enforce_login_principal, exchange_code, extract_user_info, generate_pkce,
+    login_principal_policy, peek_access_token_principal, peek_access_token_principal_id,
+    validate_state,
 };
 
 /// Maximum time to wait for the browser OAuth callback (or manual paste of the code).
@@ -112,12 +113,17 @@ pub(crate) fn callback_page(title: &str, message: &str, is_success: bool) -> Str
 }
 
 /// Build the axum router for the OIDC loopback callback server.
-fn build_callback_router(tx: tokio::sync::mpsc::Sender<CallbackResult>) -> Router {
+/// `callback_path` is `/callback` for bcode/enterprise OIDC and
+/// `/auth/callback` for the ChatGPT provider app.
+fn build_callback_router(
+    tx: tokio::sync::mpsc::Sender<CallbackResult>,
+    callback_path: &str,
+) -> Router {
     let cors =
         crate::auth::config::accounts_app_cors_layer(Method::GET).allow_private_network(true);
 
     Router::new()
-        .route("/callback", get(handle_callback))
+        .route(callback_path, get(handle_callback))
         .layer(cors)
         .with_state(tx)
 }
@@ -245,12 +251,13 @@ fn spawn_stdin_reader(tx: tokio::sync::mpsc::Sender<CallbackResult>) {
 async fn race_callback_and_client_ui(
     listener: TcpListener,
     code_rx: &mut tokio::sync::mpsc::Receiver<String>,
+    callback_path: &str,
 ) -> anyhow::Result<Callback> {
     tracing::debug!("OIDC: waiting for auth code (loopback + client paste)");
     let (tx, mut rx) = tokio::sync::mpsc::channel::<CallbackResult>(1);
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
 
-    let app = build_callback_router(tx.clone());
+    let app = build_callback_router(tx.clone(), callback_path);
     let server = tokio::spawn(async move {
         let _ = axum::serve(listener, app)
             .with_graceful_shutdown(async {
@@ -299,6 +306,7 @@ async fn race_callback_and_client_ui(
 async fn race_callback_and_stdin(
     listener: TcpListener,
     enable_stdin: bool,
+    callback_path: &str,
 ) -> anyhow::Result<Callback> {
     tracing::debug!(
         enable_stdin = enable_stdin,
@@ -307,7 +315,7 @@ async fn race_callback_and_stdin(
     let (tx, mut rx) = tokio::sync::mpsc::channel::<CallbackResult>(1);
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
 
-    let app = build_callback_router(tx.clone());
+    let app = build_callback_router(tx.clone(), callback_path);
     let server = tokio::spawn(async move {
         let _ = axum::serve(listener, app)
             .with_graceful_shutdown(async {
@@ -355,43 +363,56 @@ pub async fn run_login_flow(
     run_login_flow_with_config(oidc, auth_manager, channels).await
 }
 
-/// Run the OIDC login flow with an explicit [`OidcAuthConfig`].
-///
-/// Also used by the OAuth2 provider path via [`OAuth2ProviderConfig::as_oidc`].
-///
-/// The flow races two input paths:
-///   - **Path A**: A loopback HTTP server on `127.0.0.1` that receives the IdP redirect.
-///   - **Path B**: Stdin paste: the user manually pastes the callback URL or bare auth code.
-///
-/// Path B is essential for remote VMs where the browser runs on a different machine and the `127.0.0.1` redirect cannot reach the CLI process.
-/// * `channels`: with `Some`, the auth URL goes to the TUI and pasted codes come back; with `None`, print to stderr and read stdin (CLI mode).
-pub async fn run_login_flow_with_config(
+/// Bind the loopback callback listener. An empty `redirect_ports` (bcode's
+/// own production flow) lets the OS pick any available port. A non-empty
+/// list (local-dev bcode, or a catalog provider's pre-registered redirect
+/// URIs) tries each port in order and fails clearly if all are taken --
+/// real vendors register exact ports rather than accepting any.
+async fn bind_redirect_listener(redirect_ports: &[u16]) -> anyhow::Result<TcpListener> {
+    if redirect_ports.is_empty() {
+        return TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .map_err(|e| anyhow::Error::new(OidcError::BindLoopback(e.to_string())));
+    }
+    for &port in redirect_ports {
+        if let Ok(listener) = TcpListener::bind(("127.0.0.1", port)).await {
+            return Ok(listener);
+        }
+    }
+    Err(anyhow::Error::new(OidcError::BindLoopback(format!(
+        "all configured redirect ports are already in use: {redirect_ports:?}"
+    ))))
+}
+
+/// Result of [`authorize_and_exchange`]: raw tokens plus the discovery
+/// document and nonce a caller needs to validate an id_token, for a caller
+/// that wants one (bcode's own login does; [`run_provider_oauth_login`]
+/// doesn't and drops them).
+struct Authorized {
+    tokens: TokenResponse,
+    discovery: super::protocol::Discovery,
+    nonce: String,
+}
+
+/// The browser/loopback/stdin-paste dance and code-for-tokens exchange,
+/// shared by bcode's own login and [`run_provider_oauth_login`]. Returns raw
+/// tokens with no identity extracted and nothing persisted -- the caller
+/// decides what a "signed in" record means for its own scope.
+async fn authorize_and_exchange(
     oidc: &OidcAuthConfig,
-    auth_manager: &Arc<AuthManager>,
+    oauth2: Option<&super::super::config::OAuth2ProviderConfig>,
+    redirect_ports: &[u16],
+    provider_label: &str,
     channels: Option<super::super::flow::AuthChannels>,
-) -> anyhow::Result<(BcodeAuth, bool)> {
-    tracing::info!(issuer = %oidc.issuer, client_id = %oidc.client_id, "OIDC: starting login flow");
-
-    crate::auth::jwt::ensure_crypto_provider();
-
+) -> anyhow::Result<Authorized> {
     let discovery = discover(&oidc.issuer).await?;
     let pkce = generate_pkce();
     let state = uuid::Uuid::now_v7().to_string();
     let nonce = uuid::Uuid::now_v7().to_string();
 
-    // In local-dev mode, use a fixed callback port so the redirect_uri is stable and can be pre-registered with the local OAuth2 provider
-    // In production the OS picks a random available port
-    let callback_port: u16 = if super::super::config::use_local_auth() {
-        56121
-    } else {
-        0
-    };
-    let listener = TcpListener::bind(("127.0.0.1", callback_port))
-        .await
-        .map_err(|e| anyhow::Error::new(OidcError::BindLoopback(e.to_string())))?;
+    let listener = bind_redirect_listener(redirect_ports).await?;
     let port = listener.local_addr()?.port();
     let redirect_uri = format!("http://127.0.0.1:{}/callback", port);
-    let oauth2 = auth_manager.bcode_com_config().oauth2.as_ref();
     let auth_url = build_authorize_url(
         oidc,
         oauth2,
@@ -417,11 +438,6 @@ pub async fn run_login_flow_with_config(
     } else {
         // No client UI: print to stderr
         eprintln!();
-        let provider_label = if oidc.issuer == super::super::config::BCODE_OAUTH2_ISSUER {
-            "Bcode".to_owned()
-        } else {
-            oidc.issuer.clone()
-        };
         eprintln!("Signing in with {}...", provider_label);
         eprintln!();
         if let Err(e) = webbrowser::open(&auth_url) {
@@ -450,10 +466,10 @@ pub async fn run_login_flow_with_config(
         state: received_state,
     } = if let Some(mut rx) = code_rx {
         // Client UI: race loopback against manual paste via code_rx.
-        race_callback_and_client_ui(listener, &mut rx).await?
+        race_callback_and_client_ui(listener, &mut rx, "/callback").await?
     } else {
         // No client UI: race loopback against stdin paste.
-        race_callback_and_stdin(listener, use_stdin).await?
+        race_callback_and_stdin(listener, use_stdin, "/callback").await?
     };
 
     // Validate state (skip for bare code paste where state is empty)
@@ -474,6 +490,238 @@ pub async fn run_login_flow_with_config(
         expires_in = ?tokens.expires_in,
         "OIDC: token exchange complete"
     );
+    Ok(Authorized {
+        tokens,
+        discovery,
+        nonce,
+    })
+}
+
+/// Sign in to a catalog provider's own OAuth2/OIDC app (a subscription
+/// login), independent of bcode's own singleton session.
+///
+/// Unlike [`run_login_flow_with_config`] this enforces no team/personal
+/// principal (that policy is bcode's own) and requires no id_token (the
+/// provider's identity claims are not bcode's concern) -- it only needs an
+/// access token, and a refresh token when the provider issues one. Persists
+/// under `provider::<id>` in `auth.json`
+/// ([`crate::auth::accounts::store_provider_oauth`]), never the bcode
+/// singleton scope, so it cannot collide with or be confused for a bcode
+/// session.
+pub async fn run_provider_oauth_login(
+    provider_id: &str,
+    provider_name: &str,
+    auth: &bcode_models::ProviderAuth,
+    channels: Option<super::super::flow::AuthChannels>,
+) -> anyhow::Result<BcodeAuth> {
+    match auth.profile {
+        bcode_models::ProviderOAuthProfile::Oidc => {
+            run_provider_oidc_login(provider_id, provider_name, auth, channels).await
+        }
+        bcode_models::ProviderOAuthProfile::Chatgpt => {
+            run_provider_chatgpt_login(provider_id, provider_name, auth, channels).await
+        }
+    }
+}
+
+/// The generic, discovery-driven provider login (see [`run_provider_oauth_login`]).
+async fn run_provider_oidc_login(
+    provider_id: &str,
+    provider_name: &str,
+    auth: &bcode_models::ProviderAuth,
+    channels: Option<super::super::flow::AuthChannels>,
+) -> anyhow::Result<BcodeAuth> {
+    tracing::info!(
+        provider = %provider_id,
+        issuer = %auth.issuer,
+        "provider OAuth: starting login flow"
+    );
+    crate::auth::jwt::ensure_crypto_provider();
+    let oidc = OidcAuthConfig {
+        issuer: auth.issuer.clone(),
+        client_id: auth.client_id.clone(),
+        scopes: auth.scopes.clone(),
+        audience: None,
+    };
+    let Authorized { tokens, .. } =
+        authorize_and_exchange(&oidc, None, &auth.redirect_ports, provider_name, channels).await?;
+    let auth_record = build_bcode_auth(
+        tokens,
+        provider_user_info(provider_id),
+        &oidc.issuer,
+        &oidc.client_id,
+    );
+    crate::auth::accounts::store_provider_oauth(
+        &crate::util::bcode_home::bcode_home(),
+        provider_id,
+        auth_record.clone(),
+    )
+    .map_err(|e| anyhow::anyhow!("failed to store {provider_id}'s credential: {e}"))?;
+    tracing::info!(provider = %provider_id, "provider OAuth: login complete, credentials saved");
+    Ok(auth_record)
+}
+
+/// The ChatGPT provider login: hardcoded endpoints, `localhost`/`/auth/callback`
+/// redirect, and a post-login token-exchange that mints the API key actually
+/// used for inference. See [`super::chatgpt`].
+async fn run_provider_chatgpt_login(
+    provider_id: &str,
+    provider_name: &str,
+    auth: &bcode_models::ProviderAuth,
+    channels: Option<super::super::flow::AuthChannels>,
+) -> anyhow::Result<BcodeAuth> {
+    tracing::info!(
+        provider = %provider_id,
+        issuer = %auth.issuer,
+        "provider OAuth: starting ChatGPT login flow"
+    );
+    crate::auth::jwt::ensure_crypto_provider();
+    let pkce = generate_pkce();
+    let state = uuid::Uuid::now_v7().to_string();
+
+    let listener = bind_redirect_listener(&auth.redirect_ports).await?;
+    let port = listener.local_addr()?.port();
+    let host = super::chatgpt::redirect_host(auth);
+    let callback_path = super::chatgpt::redirect_path(auth);
+    let redirect_uri = format!("http://{host}:{port}{callback_path}");
+    let auth_url = super::chatgpt::build_authorize_url(auth, &redirect_uri, &pkce, &state);
+    tracing::debug!(port = port, redirect_uri = %redirect_uri, "ChatGPT: callback server bound");
+
+    let (url_tx, code_rx) = match channels {
+        Some(ch) => (ch.url_tx, Some(ch.code_rx)),
+        None => (None, None),
+    };
+    let has_client_ui = code_rx.is_some();
+
+    if let Err(e) = webbrowser::open(&auth_url) {
+        tracing::debug!(error = %e, "ChatGPT: failed to open browser");
+    }
+    if !has_client_ui {
+        eprintln!();
+        eprintln!("Signing in with {provider_name}...");
+        eprintln!();
+        eprintln!("Open this URL to sign in:");
+        eprintln!("  {auth_url}");
+    }
+    let use_stdin = !has_client_ui && std::io::stdin().is_terminal();
+    if use_stdin {
+        eprintln!();
+        eprintln!("Paste the URL here if it doesn't connect:");
+    }
+    if let Some(tx) = url_tx {
+        let _ = tx.send(super::super::flow::AuthUrlInfo {
+            url: auth_url.clone(),
+            mode: super::super::flow::AuthUrlMode::Loopback,
+        });
+    }
+
+    let Callback {
+        code,
+        state: received_state,
+    } = if let Some(mut rx) = code_rx {
+        race_callback_and_client_ui(listener, &mut rx, &callback_path).await?
+    } else {
+        race_callback_and_stdin(listener, use_stdin, &callback_path).await?
+    };
+
+    if !received_state.is_empty() {
+        validate_state(&state, &received_state)?;
+    }
+
+    let tokens = exchange_code(
+        &super::chatgpt::token_endpoint(auth),
+        &code,
+        &redirect_uri,
+        &auth.client_id,
+        &pkce.code_verifier,
+    )
+    .await?;
+
+    let id_token = tokens
+        .id_token
+        .as_deref()
+        .ok_or_else(|| anyhow::Error::new(OidcError::MissingIdToken))?;
+    let api_key = super::chatgpt::obtain_api_key(auth, id_token).await?;
+
+    let mut auth_record = build_bcode_auth(
+        tokens,
+        provider_user_info(provider_id),
+        &auth.issuer,
+        &auth.client_id,
+    );
+    auth_record.key = api_key;
+    // The minted key has no observable expiry; fall back to TOKEN_TTL.
+    auth_record.expires_at = None;
+    crate::auth::accounts::store_provider_oauth(
+        &crate::util::bcode_home::bcode_home(),
+        provider_id,
+        auth_record.clone(),
+    )
+    .map_err(|e| anyhow::anyhow!("failed to store {provider_id}'s credential: {e}"))?;
+    tracing::info!(provider = %provider_id, "provider OAuth: ChatGPT login complete, credentials saved");
+    Ok(auth_record)
+}
+
+/// The identity record a provider credential carries: `user_id` names the
+/// provider, and no personal claims are extracted (they are not bcode's).
+fn provider_user_info(provider_id: &str) -> OidcUserInfo {
+    OidcUserInfo {
+        user_id: format!("provider:{provider_id}"),
+        email: None,
+        first_name: None,
+        last_name: None,
+        profile_image_asset_id: None,
+        principal_type: None,
+        principal_id: None,
+        team_id: None,
+        team_name: None,
+        team_role: None,
+        organization_id: None,
+        organization_name: None,
+        organization_role: None,
+        user_blocked_reason: None,
+        team_blocked_reasons: Vec::new(),
+        coding_data_retention_opt_out: crate::auth::default_coding_data_retention_opt_out(),
+    }
+}
+
+/// Run the OIDC login flow with an explicit [`OidcAuthConfig`].
+///
+/// Also used by the OAuth2 provider path via [`OAuth2ProviderConfig::as_oidc`].
+///
+/// The flow races two input paths:
+///   - **Path A**: A loopback HTTP server on `127.0.0.1` that receives the IdP redirect.
+///   - **Path B**: Stdin paste: the user manually pastes the callback URL or bare auth code.
+///
+/// Path B is essential for remote VMs where the browser runs on a different machine and the `127.0.0.1` redirect cannot reach the CLI process.
+/// * `channels`: with `Some`, the auth URL goes to the TUI and pasted codes come back; with `None`, print to stderr and read stdin (CLI mode).
+pub async fn run_login_flow_with_config(
+    oidc: &OidcAuthConfig,
+    auth_manager: &Arc<AuthManager>,
+    channels: Option<super::super::flow::AuthChannels>,
+) -> anyhow::Result<(BcodeAuth, bool)> {
+    tracing::info!(issuer = %oidc.issuer, client_id = %oidc.client_id, "OIDC: starting login flow");
+
+    crate::auth::jwt::ensure_crypto_provider();
+
+    // In local-dev mode, use a fixed callback port so the redirect_uri is stable and can be pre-registered with the local OAuth2 provider
+    // In production the OS picks a random available port
+    let redirect_ports: &[u16] = if super::super::config::use_local_auth() {
+        &[56121]
+    } else {
+        &[]
+    };
+    let oauth2 = auth_manager.bcode_com_config().oauth2.as_ref();
+    let provider_label = if oidc.issuer == super::super::config::BCODE_OAUTH2_ISSUER {
+        "Bcode".to_owned()
+    } else {
+        oidc.issuer.clone()
+    };
+    let Authorized {
+        tokens,
+        discovery,
+        nonce,
+    } = authorize_and_exchange(oidc, oauth2, redirect_ports, &provider_label, channels).await?;
 
     // Resolve the actual principal chosen on the consent screen.
     //
@@ -591,14 +839,17 @@ mod tests {
         let Callback {
             code,
             state: received_state,
-        } = tokio::join!(race_callback_and_stdin(listener, false), async {
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-            reqwest::get(format!(
-                "http://127.0.0.1:{port}/callback?code=mock-auth-code&state={state}"
-            ))
-            .await
-            .unwrap();
-        })
+        } = tokio::join!(
+            race_callback_and_stdin(listener, false, "/callback"),
+            async {
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                reqwest::get(format!(
+                    "http://127.0.0.1:{port}/callback?code=mock-auth-code&state={state}"
+                ))
+                .await
+                .unwrap();
+            }
+        )
         .0
         .unwrap();
 

@@ -16,6 +16,7 @@ pub(crate) mod manager;
 mod model;
 pub mod oidc;
 mod pre_tui;
+pub(crate) mod provider_oauth;
 pub mod provider_setup;
 pub(crate) mod recovery;
 pub(crate) mod refresh;
@@ -42,17 +43,19 @@ pub(crate) use config::{
     force_login_team_from_env, force_login_team_from_requirements, resolve_force_login_team,
 };
 pub(crate) use external_auth::{parse_output, refresh_with_command};
-pub(crate) use flow::{
-    AuthChannels, mint_session_noninteractive, run_auth_flow, run_auth_flow_with_stderr_bridge,
-    try_noninteractive_auth_no_mint,
-};
+pub use flow::AuthChannels;
 pub use flow::{
     AuthUrlInfo, AuthUrlMode, LoginTransportOverride, LogoutResult, ensure_authenticated,
     ensure_authenticated_or_noninteractive, ensure_authenticated_with_override, perform_logout,
     run_cli_login, run_cli_logout, try_ensure_fresh_auth,
 };
+pub(crate) use flow::{
+    mint_session_noninteractive, run_auth_flow, run_auth_flow_with_stderr_bridge,
+    try_noninteractive_auth_no_mint,
+};
 pub use jwt::{is_jwt_expired_or_near, parse_jwt_expiration};
 pub use pre_tui::{PreTuiLoginOutcome, maybe_run_pre_tui_external_login};
+pub(crate) use provider_oauth::{ProviderOAuthOutcome, ProviderOAuthRef};
 mod meta;
 pub use error::{AuthError, RefreshTokenError, RefreshTokenFailedReason};
 pub use manager::{AuthManager, shared_api_key_provider};

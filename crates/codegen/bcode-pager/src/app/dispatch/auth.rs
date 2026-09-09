@@ -10,6 +10,7 @@ use crate::app::agent_view::AgentView;
 use crate::app::app_view::{ActiveView, AppView, AuthMode, AuthState};
 use crate::scrollback::block::RenderBlock;
 use crate::scrollback::blocks::SessionEvent;
+use agent_client_protocol as acp;
 
 // ---------------------------------------------------------------------------
 // Auth dispatch
@@ -224,6 +225,13 @@ pub(super) fn dispatch_login(app: &mut AppView) -> Vec<Effect> {
         return vec![];
     };
 
+    // Show the auth UI when triggered from inside a session
+    // `show_welcome` resets ephemeral state here, covering the AuthComplete / cancel-login fallbacks too (`auth_return_view` is only ever set here)
+    if !matches!(app.active_view, ActiveView::Welcome) {
+        app.auth_return_view = Some(app.active_view);
+        show_welcome(app);
+    }
+
     if bcode_shell::agent::auth_method::AuthMethodKind::from_id(&method_id)
         == bcode_shell::agent::auth_method::AuthMethodKind::ProviderSetup
         && !app.has_external_auth_provider
@@ -232,17 +240,14 @@ pub(super) fn dispatch_login(app: &mut AppView) -> Vec<Effect> {
         // auth-provider command configured -- bcode has no backend of its own
         // to sign in to. Same gate as the startup check in `event_loop.rs`;
         // `/login` and the 401 re-auth prompt both land here mid-session.
-        app.auth_state = AuthState::Pending {
-            error: Some(crate::app::event_loop::provider_sign_in_hint()),
-        };
+        // Open the in-TUI provider manager instead of an error pointing out of the TUI.
+        app.login_label = None;
+        app.login_method_id = None;
+        app.provider_setup = Some(
+            crate::views::provider_manager::ProviderManagerState::reauth(&bcode_dirs::bcode_home()),
+        );
+        app.auth_state = AuthState::Pending { error: None };
         return vec![];
-    }
-
-    // Show the auth UI when triggered from inside a session
-    // `show_welcome` resets ephemeral state here, covering the AuthComplete / cancel-login fallbacks too (`auth_return_view` is only ever set here)
-    if !matches!(app.active_view, ActiveView::Welcome) {
-        app.auth_return_view = Some(app.active_view);
-        show_welcome(app);
     }
 
     abort_prior_auth(app);
@@ -335,81 +340,287 @@ pub(super) fn handle_auth_complete(
         {
             app.apply_auth_meta(&auth_meta);
         }
+        return finish_auth_success(app);
+    }
+    vec![]
+}
 
-        app.auth_state = AuthState::Done;
-        app.auth_show_raw_url = false;
-        app.welcome_prompt_focused = !app.is_access_blocked();
-        app.auth_code_input.reset();
+/// Shared tail of a successful authentication, regardless of how the
+/// credential arrived: the ACP `authenticate()` round trip
+/// ([`handle_auth_complete`]) or the in-TUI provider manager storing a key
+/// that now resolves (`ProviderManagerOutcome::Ready`, non-interactive --
+/// there is no ACP handshake for `provider.key`, so this is the only place
+/// that transition runs).
+pub(super) fn finish_auth_success(app: &mut AppView) -> Vec<Effect> {
+    app.auth_state = AuthState::Done;
+    app.auth_show_raw_url = false;
+    app.welcome_prompt_focused = !app.is_access_blocked();
+    app.auth_code_input.reset();
 
-        // Mid-session re-auth (`/login` or a 401 prompt): restore the view the user was on instead of running the startup load-session flow
-        // The session state lives in `app.agents`, independent of `active_view`, so it is preserved across the auth detour
-        if let Some(return_view) = app.auth_return_view.take() {
-            restore_auth_return_view(app, return_view);
-            // Mid-session re-auth returns to the existing session, not the startup flow
-            // Discard any deferred startup stash rather than leaving it to fire later
-            // One example: an incidental `Ctrl+N` pressed during /login that the chokepoint deferred
-            clear_startup_actions(app);
-            // Re-auth succeeded: hide the now-stale re-auth prompt (and any trailing error blocks) so the user returns to a clean session
-            // Mirrors how the credit-limit upsell strips its stale blocks
-            // Auth is global, so handle every agent (the login may have been started from the dashboard, not the agent that 401'd)
-            let mut retry_effects = Vec::new();
-            let mut page_flips = Vec::new();
-            for agent in app.agents.values_mut() {
-                strip_trailing_auth_error_blocks(agent);
-                // Auto-resubmit the prompt that failed on the expired login so the user doesn't have to retype it
-                // The user couldn't have queued another prompt during the auth detour, so a plain front-enqueue and drain is safe
-                if let Some(prompt) = agent.reauth_stashed_prompt.take() {
-                    agent.scrollback.push_block(RenderBlock::system(
-                        "Re-authenticated. Retrying\u{2026}".to_string(),
-                    ));
-                    agent.session.enqueue_in_flight_prompt_front(prompt);
-                    let drain = maybe_drain_queue(agent);
-                    retry_effects.extend(drain.effects);
-                    page_flips.push((agent.session.id, drain.page_flip_entry));
-                }
+    // Mid-session re-auth (`/login` or a 401 prompt): restore the view the user was on instead of running the startup load-session flow
+    // The session state lives in `app.agents`, independent of `active_view`, so it is preserved across the auth detour
+    if let Some(return_view) = app.auth_return_view.take() {
+        restore_auth_return_view(app, return_view);
+        // Mid-session re-auth returns to the existing session, not the startup flow
+        // Discard any deferred startup stash rather than leaving it to fire later
+        // One example: an incidental `Ctrl+N` pressed during /login that the chokepoint deferred
+        clear_startup_actions(app);
+        // Re-auth succeeded: hide the now-stale re-auth prompt (and any trailing error blocks) so the user returns to a clean session
+        // Mirrors how the credit-limit upsell strips its stale blocks
+        // Auth is global, so handle every agent (the login may have been started from the dashboard, not the agent that 401'd)
+        let mut retry_effects = Vec::new();
+        let mut page_flips = Vec::new();
+        for agent in app.agents.values_mut() {
+            strip_trailing_auth_error_blocks(agent);
+            // Auto-resubmit the prompt that failed on the expired login so the user doesn't have to retype it
+            // The user couldn't have queued another prompt during the auth detour, so a plain front-enqueue and drain is safe
+            if let Some(prompt) = agent.reauth_stashed_prompt.take() {
+                agent.scrollback.push_block(RenderBlock::system(
+                    "Re-authenticated. Retrying\u{2026}".to_string(),
+                ));
+                agent.session.enqueue_in_flight_prompt_front(prompt);
+                let drain = maybe_drain_queue(agent);
+                retry_effects.extend(drain.effects);
+                page_flips.push((agent.session.id, drain.page_flip_entry));
             }
-            for (id, page_flip_entry) in page_flips {
-                note_peek_page_flip(app, id, page_flip_entry);
-            }
-            let mut effects = dispatch(Action::RequestBundleStatus, app);
-            if app.usage_visible {
-                effects.push(Effect::FetchAppBilling);
-            }
-            effects.extend(retry_effects);
-            return effects;
         }
-
-        // Request bundle status only; the shell auto-syncs after auth
+        for (id, page_flip_entry) in page_flips {
+            note_peek_page_flip(app, id, page_flip_entry);
+        }
         let mut effects = dispatch(Action::RequestBundleStatus, app);
-
-        // Start auto-checking subscription if gated.
-        // Check immediately (don't wait 5s) then schedule the timer.
-        if !app.has_access() {
-            app.paywall_check_started = Some(std::time::Instant::now());
-            effects.push(Effect::CheckSubscription { verify: None });
-            effects.push(Effect::SchedulePaywallCheck);
-        }
-        // Fetch billing so the welcome screen can show a credit warning.
         if app.usage_visible {
             effects.push(Effect::FetchAppBilling);
         }
-        // Fetch changelog (mirrors startup path for interactive login).
-        effects.push(Effect::FetchChangelog);
-
-        // ZDR-blocked users stay on the welcome screen; discard any deferred startup (they cannot start a session)
-        if app.is_zdr_blocked() {
-            clear_startup_actions(app);
-            return effects;
-        }
-
-        // Replay deferred session startup once both gates are open
-        // Auth is now Done, so `session_startup_allowed()` here means "is trust also resolved?"
-        // If trust is still Pending its question renders next and its answer drains instead
-        // The trust handlers use the same predicate, so the deferred startup runs exactly once after whichever gate resolves last
-        if app.session_startup_allowed() {
-            effects.extend(drain_startup_actions(app));
-        }
+        effects.extend(retry_effects);
         return effects;
+    }
+
+    // Request bundle status only; the shell auto-syncs after auth
+    let mut effects = dispatch(Action::RequestBundleStatus, app);
+
+    // Start auto-checking subscription if gated.
+    // Check immediately (don't wait 5s) then schedule the timer.
+    if !app.has_access() {
+        app.paywall_check_started = Some(std::time::Instant::now());
+        effects.push(Effect::CheckSubscription { verify: None });
+        effects.push(Effect::SchedulePaywallCheck);
+    }
+    // Fetch billing so the welcome screen can show a credit warning.
+    if app.usage_visible {
+        effects.push(Effect::FetchAppBilling);
+    }
+    // Fetch changelog (mirrors startup path for interactive login).
+    effects.push(Effect::FetchChangelog);
+
+    // ZDR-blocked users stay on the welcome screen; discard any deferred startup (they cannot start a session)
+    if app.is_zdr_blocked() {
+        clear_startup_actions(app);
+        return effects;
+    }
+
+    // Replay deferred session startup once both gates are open
+    // Auth is now Done, so `session_startup_allowed()` here means "is trust also resolved?"
+    // If trust is still Pending its question renders next and its answer drains instead
+    // The trust handlers use the same predicate, so the deferred startup runs exactly once after whichever gate resolves last
+    if app.session_startup_allowed() {
+        effects.extend(drain_startup_actions(app));
+    }
+    effects
+}
+
+// ---------------------------------------------------------------------------
+// In-TUI provider manager (`app.provider_setup`)
+// ---------------------------------------------------------------------------
+
+/// Open the in-TUI provider manager mid-session (`/providers`, palette entry).
+/// A no-op if it is already open (e.g. a second `/providers` while it is up).
+///
+/// Only the welcome view renders the manager (it shares the login screen's
+/// `AuthState::Pending` render arm), so this stashes the caller's view and
+/// switches to `Welcome` exactly like [`dispatch_login`] -- even though a
+/// working session already exists and nothing actually needs authenticating.
+/// [`dispatch_provider_manager_close`] restores both `active_view` and
+/// `auth_state` on the way out.
+pub(super) fn dispatch_open_provider_manager(app: &mut AppView) -> Vec<Effect> {
+    if app.provider_setup.is_some() {
+        return vec![];
+    }
+    if !matches!(app.active_view, ActiveView::Welcome) {
+        app.auth_return_view = Some(app.active_view);
+        show_welcome(app);
+    }
+    app.provider_setup = Some(crate::views::provider_manager::ProviderManagerState::open(
+        &bcode_dirs::bcode_home(),
+    ));
+    app.auth_state = AuthState::Pending { error: None };
+    vec![]
+}
+
+/// Close the manager (mid-session only; the view itself never emits this for
+/// a first-run manager, which has nowhere else to go). When it was opened by
+/// `/login`/a 401 prompt finding nothing to sign in to, restores the caller's
+/// view exactly like [`dispatch_cancel_login`] -- the user is bailing out
+/// without fixing the credential, which the existing re-auth cancel path
+/// already treats as returning to a session that will fail its next turn.
+pub(super) fn dispatch_provider_manager_close(app: &mut AppView) -> Vec<Effect> {
+    app.provider_setup = None;
+    if let Some(return_view) = app.auth_return_view.take() {
+        app.auth_state = AuthState::Done;
+        restore_auth_return_view(app, return_view);
+    }
+    vec![]
+}
+
+pub(super) fn dispatch_provider_manager_store_key(
+    target: crate::views::provider_manager::KeyTarget,
+    key: String,
+) -> Vec<Effect> {
+    vec![Effect::StoreProviderCredential {
+        target,
+        key: super::super::actions::RedactedKey(key),
+    }]
+}
+
+pub(super) fn dispatch_provider_manager_remove_key(
+    target: crate::views::provider_manager::KeyTarget,
+) -> Vec<Effect> {
+    vec![Effect::RemoveProviderCredential { target }]
+}
+
+/// Start a browser-based OAuth sign-in for a catalog provider that has an
+/// `auth` entry (e.g. ChatGPT). No-op for a provider with no OAuth app.
+pub(super) fn dispatch_provider_manager_oauth_login(provider_id: String) -> Vec<Effect> {
+    let Some(info) = bcode_models::provider(&provider_id) else {
+        return vec![];
+    };
+    if info.auth.is_none() {
+        return vec![];
+    }
+    vec![Effect::ProviderOAuthLogin {
+        provider_id,
+        provider_name: info.name.clone(),
+    }]
+}
+
+/// A provider OAuth sign-in finished: reload the manager's statuses and, for
+/// an auth-gated manager with a now-usable credential, finish authentication.
+pub(super) fn handle_provider_oauth_login_done(
+    app: &mut AppView,
+    provider_id: String,
+    result: Result<(), String>,
+) -> Vec<Effect> {
+    let home = bcode_dirs::bcode_home();
+    let Some(state) = app.provider_setup.as_mut() else {
+        return vec![];
+    };
+    state.finish_oauth(&home, &provider_id, result);
+    if state.auth_gated
+        && matches!(
+            state.mode,
+            crate::views::provider_manager::ProviderMode::Browse
+        )
+        && state.has_any_usable_credential()
+    {
+        return dispatch(Action::ProviderManagerReady, app);
+    }
+    vec![]
+}
+
+/// `m` in the provider manager. Mid-session (an agent is active), this is a
+/// real model switch: forward into [`Action::SetDefaultModel`]'s full
+/// switch+persist+toast path. First-run has no session to switch, so it
+/// persists `models.default` directly.
+pub(super) fn dispatch_provider_manager_set_default_model(
+    app: &mut AppView,
+    model_id: String,
+) -> Vec<Effect> {
+    if matches!(app.active_view, ActiveView::Agent(_)) {
+        dispatch(Action::SetDefaultModel(acp::ModelId::new(model_id)), app)
+    } else {
+        vec![Effect::PersistProviderDefaultModel { model_id }]
+    }
+}
+
+/// A credential now resolves and the manager was first-run: finish
+/// authentication exactly like a successful `authenticate()` round trip.
+pub(super) fn dispatch_provider_manager_ready(app: &mut AppView) -> Vec<Effect> {
+    app.provider_setup = None;
+    finish_auth_success(app)
+}
+
+/// The user declined the post-setup default-model offer
+/// ([`crate::views::provider_manager::ProviderMode::OfferDefaultModel`]): the
+/// credential still resolves, so finish authentication exactly as if they had
+/// accepted it -- only the default-model preference is skipped.
+pub(super) fn dispatch_provider_manager_dismiss_default_offer(app: &mut AppView) -> Vec<Effect> {
+    match app.provider_setup.as_ref() {
+        Some(state) if state.auth_gated && state.has_any_usable_credential() => {
+            dispatch(Action::ProviderManagerReady, app)
+        }
+        _ => vec![],
+    }
+}
+
+pub(super) fn handle_provider_credential_stored(
+    app: &mut AppView,
+    target: crate::views::provider_manager::KeyTarget,
+    verify_result: Option<Result<(), String>>,
+) -> Vec<Effect> {
+    let home = bcode_dirs::bcode_home();
+    let Some(state) = app.provider_setup.as_mut() else {
+        return vec![];
+    };
+    state.finish_store(&home, &target, verify_result);
+    // A fresh usable credential normally finishes authentication immediately,
+    // but `finish_store` may have opened `OfferDefaultModel` first -- wait for
+    // the user's answer (`ProviderManagerReady` fires from there instead).
+    if state.auth_gated
+        && matches!(
+            state.mode,
+            crate::views::provider_manager::ProviderMode::Browse
+        )
+        && state.has_any_usable_credential()
+    {
+        return dispatch(Action::ProviderManagerReady, app);
+    }
+    vec![]
+}
+
+pub(super) fn handle_provider_credential_removed(
+    app: &mut AppView,
+    target: crate::views::provider_manager::KeyTarget,
+    result: Result<bool, String>,
+) -> Vec<Effect> {
+    let home = bcode_dirs::bcode_home();
+    if let Some(state) = app.provider_setup.as_mut() {
+        state.finish_remove(&home, &target, result);
+    }
+    vec![]
+}
+
+pub(super) fn handle_provider_default_model_persisted(
+    app: &mut AppView,
+    result: Result<String, String>,
+) -> Vec<Effect> {
+    let Some(state) = app.provider_setup.as_mut() else {
+        return vec![];
+    };
+    state.notice = Some(match result {
+        Ok(model_id) => (format!("default model set to {model_id}"), false),
+        Err(e) => (format!("failed to set default model: {e}"), true),
+    });
+    // Mirrors `handle_provider_credential_stored`: accepting the
+    // `OfferDefaultModel` prompt (already reset to `Browse` by the view)
+    // finishes authentication regardless of whether the persist itself
+    // succeeded -- the credential already resolves either way.
+    if state.auth_gated
+        && matches!(
+            state.mode,
+            crate::views::provider_manager::ProviderMode::Browse
+        )
+        && state.has_any_usable_credential()
+    {
+        return dispatch(Action::ProviderManagerReady, app);
     }
     vec![]
 }

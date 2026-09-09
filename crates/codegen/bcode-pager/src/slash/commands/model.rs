@@ -186,7 +186,7 @@ fn build_model_items(models: &ModelState) -> Vec<ArgItem> {
             display.push_str(" (current)");
         }
         if !model_has_credential(info) {
-            display.push_str(" — no credential, run `bcode login`");
+            display.push_str(" — no credential, run /providers");
         }
 
         // A trailing space on reasoning models signals "more input expected" to the prompt widget
@@ -385,7 +385,7 @@ mod tests {
             .map(|(i, p)| {
                 let mut d = format!("{} · Test Model ({})", p.name, p.id);
                 if i == 0 {
-                    d.push_str(" — no credential, run `bcode login`");
+                    d.push_str(" — no credential, run /providers");
                 }
                 d
             })
