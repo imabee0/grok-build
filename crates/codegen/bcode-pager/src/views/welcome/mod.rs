@@ -103,6 +103,11 @@ const H_MARGIN_COMPACT: u16 = 1;
 /// The extra 10 columns leave breathing room.
 const MENU_MIN_WIDTH: u16 = 51;
 
+/// Width of the first-run provider manager column, wide enough for the
+/// longest status badge ("from environment (stored key overridden)" = 42
+/// cols) plus a name column and marker, without needing per-frame reflow.
+const PROVIDER_MANAGER_WIDTH: u16 = 70;
+
 /// Whether the welcome prompt is currently focused (accepting text input).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum WelcomePromptFocus {
@@ -725,11 +730,15 @@ pub fn render_welcome(
             // The bordered modal chrome is for the mid-session `/providers`
             // overlay on top of a real agent view (not wired through here).
             let state = params.provider_setup.expect("checked by this arm's guard");
-            crate::views::provider_manager::render_provider_manager_fullscreen(
-                content_area,
-                buf,
-                state,
-            );
+            let pm_width = PROVIDER_MANAGER_WIDTH.min(content_area.width);
+            let [_, pm_area, _] = Layout::horizontal([
+                Constraint::Min(0),
+                Constraint::Length(pm_width),
+                Constraint::Min(0),
+            ])
+            .flex(Flex::Center)
+            .areas(content_area);
+            crate::views::provider_manager::render_provider_manager_fullscreen(pm_area, buf, state);
             WelcomeRenderResult::default()
         }
         AuthState::Pending { error } => {
