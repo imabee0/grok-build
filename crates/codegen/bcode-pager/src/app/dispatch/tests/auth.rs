@@ -829,6 +829,148 @@ fn auth_complete_extracts_show_resolved_model_from_meta() {
 }
 
 #[test]
+fn auth_gated_followup_auto_applies_the_provider_default_then_handshakes() {
+    use crate::app::dispatch::auth::{AuthGatedFollowup, auth_gated_followup};
+    use crate::views::provider_manager::ProviderMode;
+
+    assert_eq!(
+        auth_gated_followup(false, true, &ProviderMode::Browse),
+        AuthGatedFollowup::Wait,
+        "management-only /providers must not finish auth"
+    );
+    assert_eq!(
+        auth_gated_followup(true, false, &ProviderMode::Browse),
+        AuthGatedFollowup::Wait,
+        "no credential: stay on the picker"
+    );
+    assert_eq!(
+        auth_gated_followup(
+            true,
+            true,
+            &ProviderMode::OfferDefaultModel {
+                provider_id: "p".into(),
+                model: "m".into(),
+            }
+        ),
+        AuthGatedFollowup::PersistDefaultModel("m".into()),
+    );
+    assert_eq!(
+        auth_gated_followup(true, true, &ProviderMode::Browse),
+        AuthGatedFollowup::Handshake,
+    );
+}
+
+#[test]
+fn provider_manager_ready_handshakes_provider_key() {
+    let mut app = test_app();
+    app.auth_state = AuthState::Pending { error: None };
+    let dir = tempfile::tempdir().expect("tempdir");
+    app.provider_setup =
+        Some(crate::views::provider_manager::ProviderManagerState::first_run(dir.path()));
+
+    let effects = dispatch(Action::ProviderManagerReady, &mut app);
+
+    assert!(
+        app.provider_setup.is_none(),
+        "ready must close the manager before the handshake"
+    );
+    match &app.auth_state {
+        AuthState::Authenticating {
+            auth_url: None,
+            mode: AuthMode::Pending,
+            ..
+        } => {}
+        other => panic!("expected silent Authenticating handshake, got {other:?}"),
+    }
+    assert_eq!(
+        app.login_method_id.as_ref().map(|id| id.0.as_ref()),
+        Some(bcode_shell::agent::auth_method::PROVIDER_KEY_METHOD_ID)
+    );
+    assert!(
+        effects.iter().any(|e| matches!(
+            e,
+            Effect::Authenticate {
+                method_id,
+                force_interactive: false,
+                use_oauth: false,
+                ..
+            } if method_id.0.as_ref() == bcode_shell::agent::auth_method::PROVIDER_KEY_METHOD_ID
+        )),
+        "ready must authenticate(provider.key) so session/new has an auth_method_id, got {effects:?}"
+    );
+    assert!(
+        !effects
+            .iter()
+            .any(|e| matches!(e, Effect::PollAuthUrl { .. })),
+        "provider.key is non-interactive: no URL poll"
+    );
+}
+
+#[test]
+fn provider_key_handshake_complete_finishes_auth() {
+    let mut app = test_app();
+    app.login_method_id = Some(acp::AuthMethodId::new(
+        bcode_shell::agent::auth_method::PROVIDER_KEY_METHOD_ID,
+    ));
+    app.auth_state = AuthState::Authenticating {
+        request_seq: 1,
+        handle: None,
+        auth_url: None,
+        mode: AuthMode::Pending,
+    };
+
+    dispatch(
+        Action::TaskComplete(TaskResult::AuthComplete {
+            request_seq: 1,
+            meta: None,
+        }),
+        &mut app,
+    );
+
+    assert!(
+        matches!(app.auth_state, AuthState::Done),
+        "handshake complete must open the session, got {:?}",
+        app.auth_state
+    );
+}
+
+#[test]
+fn provider_key_handshake_failure_reopens_the_picker_with_the_error() {
+    let mut app = test_app();
+    app.login_method_id = Some(acp::AuthMethodId::new(
+        bcode_shell::agent::auth_method::PROVIDER_KEY_METHOD_ID,
+    ));
+    app.auth_state = AuthState::Authenticating {
+        request_seq: 1,
+        handle: None,
+        auth_url: None,
+        mode: AuthMode::Pending,
+    };
+
+    dispatch(
+        Action::TaskComplete(TaskResult::AuthFailed {
+            request_seq: 1,
+            error: "handshake failed".into(),
+        }),
+        &mut app,
+    );
+
+    assert!(
+        matches!(app.auth_state, AuthState::Pending { error: None }),
+        "must not fall through to the generic login menu, got {:?}",
+        app.auth_state
+    );
+    let state = app
+        .provider_setup
+        .as_ref()
+        .expect("must reopen the provider picker");
+    assert_eq!(
+        state.notice.as_ref().map(|(m, err)| (m.as_str(), *err)),
+        Some(("handshake failed", true))
+    );
+}
+
+#[test]
 fn auth_complete_preserves_show_resolved_model_when_absent() {
     let mut app = test_app();
     app.show_resolved_model = false;

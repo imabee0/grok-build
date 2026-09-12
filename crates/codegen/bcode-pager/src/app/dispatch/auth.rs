@@ -347,10 +347,8 @@ pub(super) fn handle_auth_complete(
 
 /// Shared tail of a successful authentication, regardless of how the
 /// credential arrived: the ACP `authenticate()` round trip
-/// ([`handle_auth_complete`]) or the in-TUI provider manager storing a key
-/// that now resolves (`ProviderManagerOutcome::Ready`, non-interactive --
-/// there is no ACP handshake for `provider.key`, so this is the only place
-/// that transition runs).
+/// ([`handle_auth_complete`]), including the `provider.key` handshake the
+/// in-TUI provider manager starts once a credential resolves.
 pub(super) fn finish_auth_success(app: &mut AppView) -> Vec<Effect> {
     app.auth_state = AuthState::Done;
     app.auth_show_raw_url = false;
@@ -534,16 +532,7 @@ pub(super) fn handle_provider_oauth_login_done(
         return vec![];
     };
     state.finish_oauth(&home, &provider_id, result);
-    if state.auth_gated
-        && matches!(
-            state.mode,
-            crate::views::provider_manager::ProviderMode::Browse
-        )
-        && state.has_any_usable_credential()
-    {
-        return dispatch(Action::ProviderManagerReady, app);
-    }
-    vec![]
+    maybe_complete_auth_gated_setup(app)
 }
 
 /// `m` in the provider manager. Mid-session (an agent is active), this is a
@@ -561,11 +550,129 @@ pub(super) fn dispatch_provider_manager_set_default_model(
     }
 }
 
-/// A credential now resolves and the manager was first-run: finish
-/// authentication exactly like a successful `authenticate()` round trip.
+/// A credential now resolves and the manager was first-run: tell the agent
+/// via ACP `authenticate(provider.key)` so `session/new` has an
+/// `auth_method_id`. Skipping that handshake left AuthState::Done in the TUI
+/// while the agent still returned `auth_required` ("no auth method id
+/// provided") on the first turn, which bounced the user back to login.
 pub(super) fn dispatch_provider_manager_ready(app: &mut AppView) -> Vec<Effect> {
     app.provider_setup = None;
-    finish_auth_success(app)
+    begin_provider_key_handshake(app)
+}
+
+/// After a store/OAuth round trip: if this is an auth-gated manager with a
+/// usable credential, auto-apply the provider's default model (signing in to
+/// OpenAI while `models.default` is another provider's model would still
+/// 401) and handshake `provider.key`. Do not leave the user on
+/// `OfferDefaultModel` titled "Sign in to a provider".
+fn maybe_complete_auth_gated_setup(app: &mut AppView) -> Vec<Effect> {
+    let followup = {
+        let Some(state) = app.provider_setup.as_ref() else {
+            return vec![];
+        };
+        auth_gated_followup(
+            state.auth_gated,
+            state.has_any_usable_credential(),
+            &state.mode,
+        )
+    };
+    match followup {
+        AuthGatedFollowup::PersistDefaultModel(model_id) => {
+            if let Some(state) = app.provider_setup.as_mut() {
+                state.mode = crate::views::provider_manager::ProviderMode::Browse;
+            }
+            vec![Effect::PersistProviderDefaultModel { model_id }]
+        }
+        AuthGatedFollowup::Handshake => dispatch(Action::ProviderManagerReady, app),
+        AuthGatedFollowup::Wait => vec![],
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum AuthGatedFollowup {
+    PersistDefaultModel(String),
+    Handshake,
+    Wait,
+}
+
+pub(super) fn auth_gated_followup(
+    auth_gated: bool,
+    usable: bool,
+    mode: &crate::views::provider_manager::ProviderMode,
+) -> AuthGatedFollowup {
+    use crate::views::provider_manager::ProviderMode;
+    if !auth_gated || !usable {
+        return AuthGatedFollowup::Wait;
+    }
+    match mode {
+        ProviderMode::OfferDefaultModel { model, .. } if !model.is_empty() => {
+            AuthGatedFollowup::PersistDefaultModel(model.clone())
+        }
+        ProviderMode::OfferDefaultModel { .. } | ProviderMode::Browse => {
+            AuthGatedFollowup::Handshake
+        }
+        _ => AuthGatedFollowup::Wait,
+    }
+}
+
+fn begin_provider_key_handshake(app: &mut AppView) -> Vec<Effect> {
+    abort_prior_auth(app);
+    let request_seq = app.next_auth_request_seq;
+    app.next_auth_request_seq += 1;
+    app.login_method_id = Some(acp::AuthMethodId::new(
+        bcode_shell::agent::auth_method::PROVIDER_KEY_METHOD_ID,
+    ));
+    app.auth_state = AuthState::Authenticating {
+        request_seq,
+        handle: None,
+        auth_url: None,
+        mode: AuthMode::Pending,
+    };
+    vec![Effect::Authenticate {
+        request_seq,
+        method_id: acp::AuthMethodId::new(bcode_shell::agent::auth_method::PROVIDER_KEY_METHOD_ID),
+        use_oauth: false,
+        force_interactive: false,
+    }]
+}
+
+/// `authenticate(provider.key)` failed after a stored credential: reopen the
+/// picker with the error instead of the generic "Login with …" menu, which
+/// looks like the sign-in never happened.
+pub(super) fn handle_auth_failed(
+    app: &mut AppView,
+    request_seq: u64,
+    error: String,
+) -> Vec<Effect> {
+    let AuthState::Authenticating {
+        request_seq: current_seq,
+        ..
+    } = &app.auth_state
+    else {
+        return vec![];
+    };
+    if *current_seq != request_seq {
+        return vec![];
+    }
+    app.auth_code_input.reset();
+    let provider_key = app
+        .login_method_id
+        .as_ref()
+        .is_some_and(|id| id.0.as_ref() == bcode_shell::agent::auth_method::PROVIDER_KEY_METHOD_ID);
+    if provider_key {
+        let home = bcode_dirs::bcode_home();
+        let mut state = if app.auth_return_view.is_some() {
+            crate::views::provider_manager::ProviderManagerState::reauth(&home)
+        } else {
+            crate::views::provider_manager::ProviderManagerState::first_run(&home)
+        };
+        state.notice = Some((error, true));
+        app.provider_setup = Some(state);
+        app.auth_state = AuthState::Pending { error: None };
+        return vec![];
+    }
+    app.auth_state = AuthState::Pending { error: Some(error) };
+    vec![]
 }
 
 /// The user declined the post-setup default-model offer
@@ -591,19 +698,7 @@ pub(super) fn handle_provider_credential_stored(
         return vec![];
     };
     state.finish_store(&home, &target, verify_result);
-    // A fresh usable credential normally finishes authentication immediately,
-    // but `finish_store` may have opened `OfferDefaultModel` first -- wait for
-    // the user's answer (`ProviderManagerReady` fires from there instead).
-    if state.auth_gated
-        && matches!(
-            state.mode,
-            crate::views::provider_manager::ProviderMode::Browse
-        )
-        && state.has_any_usable_credential()
-    {
-        return dispatch(Action::ProviderManagerReady, app);
-    }
-    vec![]
+    maybe_complete_auth_gated_setup(app)
 }
 
 pub(super) fn handle_provider_credential_removed(
@@ -629,20 +724,7 @@ pub(super) fn handle_provider_default_model_persisted(
         Ok(model_id) => (format!("default model set to {model_id}"), false),
         Err(e) => (format!("failed to set default model: {e}"), true),
     });
-    // Mirrors `handle_provider_credential_stored`: accepting the
-    // `OfferDefaultModel` prompt (already reset to `Browse` by the view)
-    // finishes authentication regardless of whether the persist itself
-    // succeeded -- the credential already resolves either way.
-    if state.auth_gated
-        && matches!(
-            state.mode,
-            crate::views::provider_manager::ProviderMode::Browse
-        )
-        && state.has_any_usable_credential()
-    {
-        return dispatch(Action::ProviderManagerReady, app);
-    }
-    vec![]
+    maybe_complete_auth_gated_setup(app)
 }
 
 pub(super) fn handle_auth_url_ready(
