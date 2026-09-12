@@ -93,6 +93,7 @@ impl From<&ConversationRequest> for rs::CreateResponse {
     fn from(req: &ConversationRequest) -> Self {
         let input = build_responses_input(req);
         let tools = build_responses_tools(req);
+        let instructions = responses_instructions(req);
 
         let tool_choice = req.tool_choice.as_ref().map(|tc| match tc {
             ConversationToolChoice::Auto => rs::ToolChoiceParam::Mode(rs::ToolChoiceOptions::Auto),
@@ -125,7 +126,7 @@ impl From<&ConversationRequest> for rs::CreateResponse {
             conversation: None,
             include: None,
             input,
-            instructions: None,
+            instructions,
             max_output_tokens: req.max_output_tokens,
             max_tool_calls: None,
             metadata: None,
@@ -158,11 +159,31 @@ impl From<&ConversationRequest> for rs::CreateResponse {
     }
 }
 
+/// ChatGPT's Codex backend rejects `role: system` in `input`. The Responses
+/// API takes that text on `instructions` instead, which the platform API
+/// also accepts.
+fn responses_instructions(req: &ConversationRequest) -> Option<String> {
+    let text = req
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            ConversationItem::System(s) => {
+                let t = s.content.as_ref().trim();
+                (!t.is_empty()).then(|| t.to_owned())
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    (!text.is_empty()).then_some(text)
+}
+
 /// Reasoning items stay top-level siblings rather than folding into the assistant, so the input replays the model's original order.
 pub(super) fn build_responses_input(req: &ConversationRequest) -> rs::InputParam {
     let items: Vec<rs::InputItem> = req
         .items
         .iter()
+        .filter(|item| !matches!(item, ConversationItem::System(_)))
         .flat_map(conversation_item_to_input_items)
         .collect();
     rs::InputParam::Items(items)

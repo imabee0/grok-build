@@ -36,6 +36,7 @@ pub(crate) fn parse_output(output: &std::process::Output) -> anyhow::Result<Bcod
         expires_at: parsed.expires_at,
         oidc_issuer: parsed.issuer,
         oidc_client_id: None,
+        chatgpt_account_id: None,
     })
 }
 

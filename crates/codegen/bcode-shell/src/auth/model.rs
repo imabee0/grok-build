@@ -102,6 +102,12 @@ pub struct BcodeAuth {
     /// OIDC client_id used to obtain this token (needed for refresh).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub oidc_client_id: Option<String>,
+
+    /// ChatGPT account id from the IdP JWT (`https://api.openai.com/auth`).
+    /// When set, inference uses the ChatGPT Codex backend rather than the
+    /// platform API, because a ChatGPT access token is not an `openai-api-key`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chatgpt_account_id: Option<String>,
 }
 
 impl std::fmt::Debug for BcodeAuth {
@@ -192,6 +198,7 @@ impl BcodeAuth {
         self.organization_id = prev.organization_id.clone();
         self.organization_name = prev.organization_name.clone();
         self.organization_role = prev.organization_role.clone();
+        self.chatgpt_account_id = prev.chatgpt_account_id.clone();
         self.user_blocked_reason = prev.user_blocked_reason.clone();
         self.team_blocked_reasons = prev.team_blocked_reasons.clone();
         self.coding_data_retention_opt_out = prev.coding_data_retention_opt_out;
@@ -225,6 +232,7 @@ impl Default for BcodeAuth {
             expires_at: None,
             oidc_issuer: None,
             oidc_client_id: None,
+            chatgpt_account_id: None,
         }
     }
 }
@@ -372,6 +380,7 @@ mod tests {
             expires_at: None,
             oidc_issuer: None,
             oidc_client_id: None,
+            chatgpt_account_id: None,
         }
     }
 

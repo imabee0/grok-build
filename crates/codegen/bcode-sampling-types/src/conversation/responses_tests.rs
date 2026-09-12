@@ -1186,10 +1186,11 @@ fn empty_reason_reasoning_only() {
 #[test]
 fn build_responses_input_preserves_multi_turn_ordering() {
     // 4-turn conversation where each assistant turn carries reasoning.
-    // The wire-level item order must be
-    //     [Sys, U1, R, A1, U2, R, A2, U3, R, A3, U4, R, A4, U5]
+    // System text is `instructions`, not an input role. The wire-level item
+    // order must be
+    //     [U1, R, A1, U2, R, A2, U3, R, A3, U4, R, A4, U5]
     // and NOT the buggy
-    //     [Sys, U1, U2, U3, U4, U5, R, A1, R, A2, ...]
+    //     [U1, U2, U3, U4, U5, R, A1, R, A2, ...]
     // which would shift the cache prefix every turn.
     fn r(text: &str) -> ConversationItem {
         ConversationItem::Reasoning(rs::ReasoningItem {
@@ -1226,7 +1227,7 @@ fn build_responses_input_preserves_multi_turn_ordering() {
     };
 
     // Walk the wire items and verify the expected pattern.
-    // Roles per wire item: System, User, Reasoning(role=Assistant), Assistant, User, Reasoning, Assistant, ...
+    // Roles per wire item: User, Reasoning, Assistant, User, Reasoning, Assistant, ...
     let kinds: Vec<&'static str> = wire_items
         .iter()
         .map(|w| match w {
@@ -1243,10 +1244,12 @@ fn build_responses_input_preserves_multi_turn_ordering() {
     assert_eq!(
         kinds,
         vec![
-            "Sys", "U", "R", "A", "U", "R", "A", "U", "R", "A", "U", "R", "A", "U",
+            "U", "R", "A", "U", "R", "A", "U", "R", "A", "U", "R", "A", "U",
         ],
         "multi-turn ordering must preserve interleaved Reasoning ↔ Assistant per turn"
     );
+    let body: rs::CreateResponse = (&req).into();
+    assert_eq!(body.instructions.as_deref(), Some("you are helpful"));
 }
 
 #[test]
@@ -1385,12 +1388,11 @@ fn build_responses_input_single_reasoning_sibling_lands_inline() {
     let input = input_items_json(&req);
     let summary = summarise_input(&input);
 
-    // Expected: [system, user, reasoning, assistant]
-    assert_eq!(summary.len(), 4, "got: {summary:?}");
-    assert_eq!(summary[0], "system:sys");
-    assert_eq!(summary[1], "user:u1");
-    assert_eq!(summary[2], "reasoning:r_abc");
-    assert_eq!(summary[3], "assistant:hi");
+    // Expected: [user, reasoning, assistant] — system is `instructions`.
+    assert_eq!(summary.len(), 3, "got: {summary:?}");
+    assert_eq!(summary[0], "user:u1");
+    assert_eq!(summary[1], "reasoning:r_abc");
+    assert_eq!(summary[2], "assistant:hi");
 
     // No placeholder strings must appear
     let body_str = serde_json::to_string(&input).unwrap();
@@ -1400,7 +1402,7 @@ fn build_responses_input_single_reasoning_sibling_lands_inline() {
     );
 
     assert_eq!(
-        input[2].get("encrypted_content").and_then(|v| v.as_str()),
+        input[1].get("encrypted_content").and_then(|v| v.as_str()),
         Some("enc1"),
     );
 }

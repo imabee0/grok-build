@@ -24,7 +24,9 @@ use super::super::BcodeAuth;
 use super::protocol::{OidcError, OidcUserInfo, TokenResponse, build_bcode_auth};
 use super::refresh::{OidcRefreshResult, classify_terminal, is_network_unreachable};
 use crate::auth::error::RefreshTokenFailedReason;
+use crate::auth::jwt::ensure_crypto_provider;
 use bcode_models::ProviderAuth;
+use indexmap::IndexMap;
 
 /// RFC 8693 token-exchange grant type.
 const TOKEN_EXCHANGE_GRANT_TYPE: &str = "urn:ietf:params:oauth:grant-type:token-exchange";
@@ -140,6 +142,90 @@ pub(super) async fn obtain_api_key(
         }));
     }
     Ok(resp.json::<ApiKeyExchangeResp>().await?.access_token)
+}
+
+/// ChatGPT Codex inference host. A ChatGPT OAuth access token is not a
+/// platform `openai-api-key`; Codex talks here, not `api.openai.com`.
+pub(crate) const CHATGPT_CODEX_BASE_URL: &str = "https://chatgpt.com/backend-api/codex";
+
+#[derive(Debug, Default, serde::Deserialize)]
+struct ChatgptAuthClaim {
+    #[serde(default)]
+    organization_id: Option<String>,
+    #[serde(default)]
+    chatgpt_account_id: Option<String>,
+}
+
+#[derive(Debug, Default, serde::Deserialize)]
+struct ChatgptJwtClaims {
+    #[serde(rename = "https://api.openai.com/auth", default)]
+    auth: Option<ChatgptAuthClaim>,
+}
+
+/// Decode ChatGPT IdP claims from an access or id token. Signature is not
+/// checked: the token came from the token endpoint we just called, or from
+/// `auth.json` we wrote after that call.
+fn chatgpt_jwt_claims(token: &str) -> ChatgptJwtClaims {
+    ensure_crypto_provider();
+    jsonwebtoken::dangerous::insecure_decode::<ChatgptJwtClaims>(token)
+        .map(|d| d.claims)
+        .unwrap_or_default()
+}
+
+fn nonempty(s: Option<String>) -> Option<String> {
+    s.filter(|v| !v.trim().is_empty())
+}
+
+pub(crate) fn chatgpt_account_id_from_token(token: &str) -> Option<String> {
+    nonempty(
+        chatgpt_jwt_claims(token)
+            .auth
+            .and_then(|a| a.chatgpt_account_id),
+    )
+}
+
+pub(crate) fn chatgpt_organization_id_from_token(token: &str) -> Option<String> {
+    nonempty(
+        chatgpt_jwt_claims(token)
+            .auth
+            .and_then(|a| a.organization_id),
+    )
+}
+
+/// Whether `auth.key` is a ChatGPT subscription JWT rather than a minted
+/// platform API key (`sk-…`).
+fn is_chatgpt_subscription_key(key: &str) -> bool {
+    let key = key.trim();
+    key.starts_with("eyJ") && !key.starts_with("sk-")
+}
+
+/// Base URL and extra headers for a stored OpenAI provider credential.
+///
+/// A minted `openai-api-key` stays on the catalog URL. A ChatGPT access
+/// token is sent to the Codex ChatGPT backend with `ChatGPT-Account-ID`.
+pub(crate) fn chatgpt_inference_route(
+    auth: &BcodeAuth,
+    catalog_base_url: &str,
+) -> (String, IndexMap<String, String>) {
+    let openai_issuer = auth
+        .oidc_issuer
+        .as_deref()
+        .is_some_and(|iss| iss.trim_end_matches('/') == "https://auth.openai.com");
+    if !openai_issuer || !is_chatgpt_subscription_key(&auth.key) {
+        return (catalog_base_url.to_owned(), IndexMap::new());
+    }
+    let account_id = auth
+        .chatgpt_account_id
+        .clone()
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| chatgpt_account_id_from_token(&auth.key));
+    let mut headers = IndexMap::new();
+    if let Some(id) = account_id {
+        headers.insert("ChatGPT-Account-ID".into(), id);
+    }
+    headers.insert("originator".into(), "bcode".into());
+    headers.insert("OpenAI-Beta".into(), "responses=v1".into());
+    (CHATGPT_CODEX_BASE_URL.to_owned(), headers)
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -463,5 +549,63 @@ mod tests {
             Some("refresh_token_expired")
         );
         assert_eq!(extract_error_code("not json"), None);
+    }
+
+    fn jwt_with_payload(payload_json: &str) -> String {
+        use base64::Engine;
+        let enc = base64::engine::general_purpose::URL_SAFE_NO_PAD;
+        let header = enc.encode(r#"{"alg":"RS256","typ":"JWT"}"#);
+        let payload = enc.encode(payload_json);
+        format!("{header}.{payload}.sig")
+    }
+
+    #[test]
+    fn jwt_claims_read_chatgpt_account_and_org() {
+        let token = jwt_with_payload(
+            r#"{"https://api.openai.com/auth":{"chatgpt_account_id":"acct-1","organization_id":"org-9"}}"#,
+        );
+        assert_eq!(
+            chatgpt_account_id_from_token(&token).as_deref(),
+            Some("acct-1")
+        );
+        assert_eq!(
+            chatgpt_organization_id_from_token(&token).as_deref(),
+            Some("org-9")
+        );
+    }
+
+    #[test]
+    fn inference_route_uses_codex_backend_for_chatgpt_jwt() {
+        let token =
+            jwt_with_payload(r#"{"https://api.openai.com/auth":{"chatgpt_account_id":"acct-1"}}"#);
+        let auth = BcodeAuth {
+            key: token,
+            oidc_issuer: Some("https://auth.openai.com".into()),
+            ..BcodeAuth::test_default()
+        };
+        let (url, headers) = chatgpt_inference_route(&auth, "https://api.openai.com/v1");
+        assert_eq!(url, CHATGPT_CODEX_BASE_URL);
+        assert_eq!(
+            headers.get("ChatGPT-Account-ID").map(String::as_str),
+            Some("acct-1")
+        );
+        assert_eq!(headers.get("originator").map(String::as_str), Some("bcode"));
+        assert_eq!(
+            headers.get("OpenAI-Beta").map(String::as_str),
+            Some("responses=v1")
+        );
+    }
+
+    #[test]
+    fn inference_route_keeps_platform_url_for_minted_api_key() {
+        let auth = BcodeAuth {
+            key: "sk-live-not-a-jwt".into(),
+            oidc_issuer: Some("https://auth.openai.com".into()),
+            chatgpt_account_id: Some("acct-1".into()),
+            ..BcodeAuth::test_default()
+        };
+        let (url, headers) = chatgpt_inference_route(&auth, "https://api.openai.com/v1");
+        assert_eq!(url, "https://api.openai.com/v1");
+        assert!(headers.is_empty());
     }
 }

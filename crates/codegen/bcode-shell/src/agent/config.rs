@@ -4941,6 +4941,7 @@ pub(crate) struct ResolvedCredentials {
     pub base_url: String,
     pub auth_type: bcode_chat_state::AuthType,
     pub auth_scheme: AuthScheme,
+    pub extra_headers: IndexMap<String, String>,
 }
 /// First usable BYOK credential: a non-empty (trimmed) api_key, else the first set, non-empty env_key value.
 /// Single source of truth for has_own_credentials, resolve_credentials, and the JWT-reload path.
@@ -4959,10 +4960,11 @@ pub(crate) fn resolve_credentials(
     session_key: Option<&str>,
 ) -> ResolvedCredentials {
     let info = model.info();
-    let (api_key, base_url, auth_type) = if let Some(key) = model.own_credential() {
+    let (api_key, base_url, extra_headers, auth_type) = if let Some(key) = model.own_credential() {
         (
             Some(key),
             info.base_url.clone(),
+            IndexMap::new(),
             bcode_chat_state::AuthType::ApiKey,
         )
     } else if let Some(key) = model
@@ -4973,16 +4975,17 @@ pub(crate) fn resolve_credentials(
         (
             Some(key),
             info.base_url.clone(),
+            IndexMap::new(),
             bcode_chat_state::AuthType::ApiKey,
         )
-    } else if let Some(key) = model
+    } else if let Some(auth) = model
         .oauth_provider
         .as_ref()
-        .and_then(|p| p.cached_token(&crate::util::bcode_home::bcode_home()))
+        .and_then(|p| p.cached_auth(&crate::util::bcode_home::bcode_home()))
         .or_else(|| {
-            crate::auth::accounts::provider_credential(
-                info.model_family.as_deref(),
+            crate::auth::accounts::read_provider_auth(
                 &crate::util::bcode_home::bcode_home(),
+                info.model_family.as_deref()?,
             )
         })
     {
@@ -4992,9 +4995,15 @@ pub(crate) fn resolve_credentials(
         // OAuth-mode credential is served (and expiry-checked) through
         // `oauth_provider`; a plain API key falls through to the same
         // `auth.json` scope's bare read, unchanged from before.
+        //
+        // A ChatGPT subscription JWT is not a platform API key: send it to
+        // the Codex ChatGPT backend instead of api.openai.com.
+        let (base_url, extra_headers) =
+            crate::auth::oidc::chatgpt_inference_route(&auth, &info.base_url);
         (
-            Some(key),
-            info.base_url.clone(),
+            Some(auth.key),
+            base_url,
+            extra_headers,
             bcode_chat_state::AuthType::ApiKey,
         )
     } else if let Some(provider) = model.auth_provider.as_ref() {
@@ -5002,6 +5011,7 @@ pub(crate) fn resolve_credentials(
         (
             provider.cached_token(),
             info.base_url.clone(),
+            IndexMap::new(),
             bcode_chat_state::AuthType::ApiKey,
         )
     } else if let Some(key) = session_key
@@ -5013,6 +5023,7 @@ pub(crate) fn resolve_credentials(
         (
             Some(key.to_owned()),
             info.base_url.clone(),
+            IndexMap::new(),
             bcode_chat_state::AuthType::SessionToken,
         )
     } else if let Ok(key) = crate::agent::auth_method::read_bcode_api_key_env() {
@@ -5020,7 +5031,12 @@ pub(crate) fn resolve_credentials(
             .api_base_url
             .clone()
             .unwrap_or_else(|| info.base_url.clone());
-        (Some(key), url, bcode_chat_state::AuthType::ApiKey)
+        (
+            Some(key),
+            url,
+            IndexMap::new(),
+            bcode_chat_state::AuthType::ApiKey,
+        )
     } else {
         if let Some(ref env_keys) = model.env_key
             && !env_keys.is_empty()
@@ -5035,6 +5051,7 @@ pub(crate) fn resolve_credentials(
         (
             None,
             info.base_url.clone(),
+            IndexMap::new(),
             bcode_chat_state::AuthType::ApiKey,
         )
     };
@@ -5049,6 +5066,7 @@ pub(crate) fn resolve_credentials(
         base_url,
         auth_type,
         auth_scheme,
+        extra_headers,
     }
 }
 /// `disable_api_key_auth` at the credential seam: swap a first-party bcode API key for the IdP session.
@@ -5379,6 +5397,9 @@ pub(crate) fn sampling_config_for_model(
     let temperature = info.temperature;
     let top_p = info.top_p;
     let mut extra_headers = info.extra_headers.clone();
+    for (k, v) in credentials.extra_headers {
+        extra_headers.entry(k).or_insert(v);
+    }
     inject_url_derived_headers(
         &mut extra_headers,
         alpha_test_key.as_deref(),
