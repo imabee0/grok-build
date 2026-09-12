@@ -818,6 +818,8 @@ pub struct AppView {
     pub welcome_menu_index: Option<usize>,
     /// Hit-test rects for welcome menu items (populated during render).
     pub welcome_menu_rects: Vec<ratatui::layout::Rect>,
+    /// Hit-test rects for the first-run Providers / Accounts tabs.
+    pub welcome_provider_tab_rects: Vec<ratatui::layout::Rect>,
     /// Whether the welcome menu currently includes a "Changelog" row (above Quit).
     /// Set during render; the input handler uses it to size the menu and map the extra row to the release-notes action.
     pub welcome_show_changelog_action: bool,
@@ -1067,6 +1069,11 @@ pub struct AppView {
     /// set when [`bcode_shell::agent::auth_method::AuthMethodKind::ProviderSetup`]
     /// is the advertised method (bcode has no account of its own).
     pub provider_setup: Option<crate::views::provider_manager::ProviderManagerState>,
+    /// Sender for pasted OAuth callback codes while a provider browser login
+    /// is in flight. Dropped on cancel or completion.
+    pub provider_oauth_code_tx: Option<tokio::sync::mpsc::Sender<String>>,
+    /// Abort handle for the in-flight provider OAuth login task.
+    pub provider_oauth_abort: Option<tokio::task::AbortHandle>,
     /// Initial auth mode hint from method metadata.
     pub auth_start_mode: AuthMode,
     /// Text buffer for manual auth token paste (loopback mode).
@@ -1480,6 +1487,7 @@ impl AppView {
             minimal_state: crate::minimal_api::MinimalState::default(),
             welcome_menu_index: None,
             welcome_menu_rects: Vec::new(),
+            welcome_provider_tab_rects: Vec::new(),
             welcome_show_changelog_action: false,
             welcome_import_banner_rect: None,
             last_mouse_pos: None,
@@ -1582,6 +1590,8 @@ impl AppView {
             login_label: None,
             login_method_id: None,
             provider_setup: None,
+            provider_oauth_code_tx: None,
+            provider_oauth_abort: None,
             auth_start_mode: AuthMode::Pending,
             auth_code_input: LineEditor::default(),
             next_auth_request_seq: 1,
@@ -2530,6 +2540,7 @@ impl AppView {
                     provider_setup: &mut self.provider_setup,
                     menu_index: &mut self.welcome_menu_index,
                     menu_rects: &self.welcome_menu_rects,
+                    provider_tab_rects: &self.welcome_provider_tab_rects,
                     menu_count: if zdr_blocked {
                         2
                     } else {
@@ -3154,6 +3165,7 @@ struct WelcomeInputCtx<'a> {
     provider_setup: &'a mut Option<crate::views::provider_manager::ProviderManagerState>,
     menu_index: &'a mut Option<usize>,
     menu_rects: &'a [ratatui::layout::Rect],
+    provider_tab_rects: &'a [ratatui::layout::Rect],
     menu_count: usize,
     prompt_rect: Option<&'a ratatui::layout::Rect>,
     import_banner_rect: Option<&'a ratatui::layout::Rect>,
@@ -3305,6 +3317,28 @@ fn handle_welcome_input(ev: &Event, ctx: &mut WelcomeInputCtx<'_>) -> InputOutco
             Event::Key(key) if key.kind != crossterm::event::KeyEventKind::Release => {
                 state.handle_key(key)
             }
+            Event::Mouse(mouse) => {
+                if matches!(
+                    mouse.kind,
+                    crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
+                ) {
+                    let pos = ratatui::layout::Position::new(mouse.column, mouse.row);
+                    if ctx.auth_url_rect.is_some_and(|r| r.contains(pos)) {
+                        return InputOutcome::Action(Action::CopyAuthUrl);
+                    }
+                    if ctx.auth_fallback_rect.is_some_and(|r| r.contains(pos)) {
+                        return InputOutcome::Action(Action::ShowRawAuthUrl);
+                    }
+                }
+                state.handle_mouse(
+                    mouse.kind,
+                    mouse.column,
+                    mouse.row,
+                    ctx.menu_rects,
+                    ctx.provider_tab_rects,
+                )
+            }
+            Event::Paste(text) => state.handle_paste(text),
             Event::Resize(_, _) => return InputOutcome::Changed,
             _ => ProviderManagerOutcome::Unchanged,
         };
@@ -3326,6 +3360,13 @@ fn handle_welcome_input(ev: &Event, ctx: &mut WelcomeInputCtx<'_>) -> InputOutco
             }
             ProviderManagerOutcome::DismissDefaultOffer => {
                 InputOutcome::Action(Action::ProviderManagerDismissDefaultOffer)
+            }
+            ProviderManagerOutcome::Quit => InputOutcome::Action(Action::Quit),
+            ProviderManagerOutcome::CancelOAuth => {
+                InputOutcome::Action(Action::ProviderManagerCancelOAuth)
+            }
+            ProviderManagerOutcome::SubmitOAuthCode(code) => {
+                InputOutcome::Action(Action::ProviderManagerSubmitOAuthCode(code))
             }
         };
     }
@@ -4656,6 +4697,7 @@ impl AppView {
                             &mut self.session_picker_state,
                         );
                         self.welcome_menu_rects = result.menu_rects;
+                        self.welcome_provider_tab_rects = result.provider_tab_rects;
                         self.welcome_show_changelog_action = result.changelog_action_present;
                         self.welcome_prompt_rect = result.prompt_rect;
                         self.welcome_import_banner_rect = result.import_banner_rect;

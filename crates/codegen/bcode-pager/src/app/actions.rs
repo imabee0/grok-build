@@ -637,6 +637,10 @@ pub enum Action {
     ProviderManagerOAuthLogin {
         provider_id: String,
     },
+    /// Abort the in-flight provider OAuth browser flow.
+    ProviderManagerCancelOAuth,
+    /// User pasted a callback URL / code into the in-TUI OAuth prompt.
+    ProviderManagerSubmitOAuthCode(String),
     /// A credential now resolves and the provider manager was first-run:
     /// finish authentication and start a session, exactly like a successful
     /// `authenticate()` round trip.
@@ -2882,6 +2886,11 @@ pub enum TaskResult {
     ProviderOAuthLoginDone {
         provider_id: String,
         result: Result<(), String>,
+    },
+    /// The provider OAuth authorize URL is ready to show / copy.
+    ProviderOAuthUrl {
+        provider_id: String,
+        url: String,
     },
     /// Best-effort `bcode.invalid/auth/cancel` finished (no UI update; state already left Authenticating).
     AuthCancelComplete,

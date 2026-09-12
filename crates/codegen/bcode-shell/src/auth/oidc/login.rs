@@ -249,22 +249,13 @@ fn spawn_stdin_reader(tx: tokio::sync::mpsc::Sender<CallbackResult>) {
 
 /// Race loopback callback against manual paste from `code_rx`.
 async fn race_callback_and_client_ui(
-    listener: TcpListener,
+    bind: LoopbackBind,
     code_rx: &mut tokio::sync::mpsc::Receiver<String>,
     callback_path: &str,
 ) -> anyhow::Result<Callback> {
     tracing::debug!("OIDC: waiting for auth code (loopback + client paste)");
     let (tx, mut rx) = tokio::sync::mpsc::channel::<CallbackResult>(1);
-    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
-
-    let app = build_callback_router(tx.clone(), callback_path);
-    let server = tokio::spawn(async move {
-        let _ = axum::serve(listener, app)
-            .with_graceful_shutdown(async {
-                let _ = shutdown_rx.await;
-            })
-            .await;
-    });
+    let servers = spawn_callback_servers(bind.listeners, callback_path, tx.clone());
 
     // Bridge client paste input into the callback channel.
     let client_tx = tx.clone();
@@ -296,15 +287,32 @@ async fn race_callback_and_client_ui(
         }
     };
 
-    let _ = shutdown_tx.send(());
-    let _ = server.await;
+    for server in servers {
+        server.abort();
+    }
 
     result.map_err(|e| anyhow::Error::new(OidcError::CallbackAuthFailed(e)))
 }
 
+fn spawn_callback_servers(
+    listeners: Vec<TcpListener>,
+    callback_path: &str,
+    tx: tokio::sync::mpsc::Sender<CallbackResult>,
+) -> Vec<tokio::task::JoinHandle<()>> {
+    listeners
+        .into_iter()
+        .map(|listener| {
+            let app = build_callback_router(tx.clone(), callback_path);
+            tokio::spawn(async move {
+                let _ = axum::serve(listener, app).await;
+            })
+        })
+        .collect()
+}
+
 /// Race loopback callback against stdin paste.
 async fn race_callback_and_stdin(
-    listener: TcpListener,
+    bind: LoopbackBind,
     enable_stdin: bool,
     callback_path: &str,
 ) -> anyhow::Result<Callback> {
@@ -313,16 +321,7 @@ async fn race_callback_and_stdin(
         "OIDC: waiting for auth code (loopback + stdin)"
     );
     let (tx, mut rx) = tokio::sync::mpsc::channel::<CallbackResult>(1);
-    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
-
-    let app = build_callback_router(tx.clone(), callback_path);
-    let server = tokio::spawn(async move {
-        let _ = axum::serve(listener, app)
-            .with_graceful_shutdown(async {
-                let _ = shutdown_rx.await;
-            })
-            .await;
-    });
+    let servers = spawn_callback_servers(bind.listeners, callback_path, tx.clone());
 
     if enable_stdin {
         spawn_stdin_reader(tx.clone());
@@ -344,8 +343,9 @@ async fn race_callback_and_stdin(
             anyhow::Error::new(OidcError::CallbackChannelClosed)
         })?;
 
-    let _ = shutdown_tx.send(());
-    let _ = server.await;
+    for server in servers {
+        server.abort();
+    }
 
     result.map_err(|e| anyhow::Error::new(OidcError::CallbackAuthFailed(e)))
 }
@@ -368,15 +368,37 @@ pub async fn run_login_flow(
 /// list (local-dev bcode, or a catalog provider's pre-registered redirect
 /// URIs) tries each port in order and fails clearly if all are taken --
 /// real vendors register exact ports rather than accepting any.
-async fn bind_redirect_listener(redirect_ports: &[u16]) -> anyhow::Result<TcpListener> {
+struct LoopbackBind {
+    listeners: Vec<TcpListener>,
+    port: u16,
+}
+
+/// Bind loopback on IPv4 and, when the OS allows it, IPv6. ChatGPT's
+/// redirect_uri uses `localhost`, which often resolves to `::1` first.
+async fn bind_redirect_listener(redirect_ports: &[u16]) -> anyhow::Result<LoopbackBind> {
     if redirect_ports.is_empty() {
-        return TcpListener::bind(("127.0.0.1", 0))
+        let v4 = TcpListener::bind(("127.0.0.1", 0))
             .await
-            .map_err(|e| anyhow::Error::new(OidcError::BindLoopback(e.to_string())));
+            .map_err(|e| anyhow::Error::new(OidcError::BindLoopback(e.to_string())))?;
+        let port = v4.local_addr()?.port();
+        let mut listeners = vec![v4];
+        if let Ok(v6) = TcpListener::bind(("::1", port)).await {
+            listeners.push(v6);
+        }
+        return Ok(LoopbackBind { listeners, port });
     }
     for &port in redirect_ports {
-        if let Ok(listener) = TcpListener::bind(("127.0.0.1", port)).await {
-            return Ok(listener);
+        let v4 = TcpListener::bind(("127.0.0.1", port)).await.ok();
+        let v6 = TcpListener::bind(("::1", port)).await.ok();
+        let mut listeners = Vec::new();
+        if let Some(v4) = v4 {
+            listeners.push(v4);
+        }
+        if let Some(v6) = v6 {
+            listeners.push(v6);
+        }
+        if !listeners.is_empty() {
+            return Ok(LoopbackBind { listeners, port });
         }
     }
     Err(anyhow::Error::new(OidcError::BindLoopback(format!(
@@ -404,14 +426,15 @@ async fn authorize_and_exchange(
     redirect_ports: &[u16],
     provider_label: &str,
     channels: Option<super::super::flow::AuthChannels>,
+    attach_client_version: bool,
 ) -> anyhow::Result<Authorized> {
     let discovery = discover(&oidc.issuer).await?;
     let pkce = generate_pkce();
     let state = uuid::Uuid::now_v7().to_string();
     let nonce = uuid::Uuid::now_v7().to_string();
 
-    let listener = bind_redirect_listener(redirect_ports).await?;
-    let port = listener.local_addr()?.port();
+    let bind = bind_redirect_listener(redirect_ports).await?;
+    let port = bind.port;
     let redirect_uri = format!("http://127.0.0.1:{}/callback", port);
     let auth_url = build_authorize_url(
         oidc,
@@ -466,10 +489,10 @@ async fn authorize_and_exchange(
         state: received_state,
     } = if let Some(mut rx) = code_rx {
         // Client UI: race loopback against manual paste via code_rx.
-        race_callback_and_client_ui(listener, &mut rx, "/callback").await?
+        race_callback_and_client_ui(bind, &mut rx, "/callback").await?
     } else {
         // No client UI: race loopback against stdin paste.
-        race_callback_and_stdin(listener, use_stdin, "/callback").await?
+        race_callback_and_stdin(bind, use_stdin, "/callback").await?
     };
 
     // Validate state (skip for bare code paste where state is empty)
@@ -483,6 +506,7 @@ async fn authorize_and_exchange(
         &redirect_uri,
         &oidc.client_id,
         &pkce.code_verifier,
+        attach_client_version,
     )
     .await?;
     tracing::info!(
@@ -543,8 +567,15 @@ async fn run_provider_oidc_login(
         scopes: auth.scopes.clone(),
         audience: None,
     };
-    let Authorized { tokens, .. } =
-        authorize_and_exchange(&oidc, None, &auth.redirect_ports, provider_name, channels).await?;
+    let Authorized { tokens, .. } = authorize_and_exchange(
+        &oidc,
+        None,
+        &auth.redirect_ports,
+        provider_name,
+        channels,
+        false,
+    )
+    .await?;
     let auth_record = build_bcode_auth(
         tokens,
         provider_user_info(provider_id),
@@ -579,8 +610,8 @@ async fn run_provider_chatgpt_login(
     let pkce = generate_pkce();
     let state = uuid::Uuid::now_v7().to_string();
 
-    let listener = bind_redirect_listener(&auth.redirect_ports).await?;
-    let port = listener.local_addr()?.port();
+    let bind = bind_redirect_listener(&auth.redirect_ports).await?;
+    let port = bind.port;
     let host = super::chatgpt::redirect_host(auth);
     let callback_path = super::chatgpt::redirect_path(auth);
     let redirect_uri = format!("http://{host}:{port}{callback_path}");
@@ -619,9 +650,9 @@ async fn run_provider_chatgpt_login(
         code,
         state: received_state,
     } = if let Some(mut rx) = code_rx {
-        race_callback_and_client_ui(listener, &mut rx, &callback_path).await?
+        race_callback_and_client_ui(bind, &mut rx, &callback_path).await?
     } else {
-        race_callback_and_stdin(listener, use_stdin, &callback_path).await?
+        race_callback_and_stdin(bind, use_stdin, &callback_path).await?
     };
 
     if !received_state.is_empty() {
@@ -634,6 +665,7 @@ async fn run_provider_chatgpt_login(
         &redirect_uri,
         &auth.client_id,
         &pkce.code_verifier,
+        false,
     )
     .await?;
 
@@ -721,7 +753,15 @@ pub async fn run_login_flow_with_config(
         tokens,
         discovery,
         nonce,
-    } = authorize_and_exchange(oidc, oauth2, redirect_ports, &provider_label, channels).await?;
+    } = authorize_and_exchange(
+        oidc,
+        oauth2,
+        redirect_ports,
+        &provider_label,
+        channels,
+        true,
+    )
+    .await?;
 
     // Resolve the actual principal chosen on the consent screen.
     //
@@ -795,6 +835,13 @@ mod tests {
     use super::super::test_helpers::*;
     use super::*;
 
+    #[tokio::test]
+    async fn bind_redirect_listener_returns_a_port() {
+        let bind = bind_redirect_listener(&[]).await.unwrap();
+        assert!(bind.port > 0);
+        assert!(!bind.listeners.is_empty());
+    }
+
     /// End-to-end test: a mock IdP and the full login flow, with the code arriving via loopback.
     /// Exercises discovery, PKCE, race_callback_and_stdin, token exchange, user info, and persistence.
     #[tokio::test]
@@ -822,8 +869,8 @@ mod tests {
         let pkce = generate_pkce();
         let state = "test-state".to_string();
 
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let port = listener.local_addr().unwrap().port();
+        let bind = bind_redirect_listener(&[]).await.unwrap();
+        let port = bind.port;
         let redirect_uri = format!("http://127.0.0.1:{port}/callback");
         let _auth_url = build_authorize_url(
             &oidc_cfg,
@@ -839,17 +886,14 @@ mod tests {
         let Callback {
             code,
             state: received_state,
-        } = tokio::join!(
-            race_callback_and_stdin(listener, false, "/callback"),
-            async {
-                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-                reqwest::get(format!(
-                    "http://127.0.0.1:{port}/callback?code=mock-auth-code&state={state}"
-                ))
-                .await
-                .unwrap();
-            }
-        )
+        } = tokio::join!(race_callback_and_stdin(bind, false, "/callback"), async {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            reqwest::get(format!(
+                "http://127.0.0.1:{port}/callback?code=mock-auth-code&state={state}"
+            ))
+            .await
+            .unwrap();
+        })
         .0
         .unwrap();
 
@@ -862,6 +906,7 @@ mod tests {
             &redirect_uri,
             &oidc_cfg.client_id,
             &pkce.code_verifier,
+            true,
         )
         .await
         .unwrap();

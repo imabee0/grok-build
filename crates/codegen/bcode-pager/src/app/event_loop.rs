@@ -4468,6 +4468,12 @@ fn process_effects(
                 app.auth_url_poll_handle = Some((seq, abort_handle));
             }
         }
+        if let Some(tx) = meta.provider_oauth_code_tx {
+            app.provider_oauth_code_tx = Some(tx);
+        }
+        if let Some(abort) = meta.provider_oauth_abort {
+            app.provider_oauth_abort = Some(abort);
+        }
         if quit {
             return true;
         }

@@ -580,6 +580,10 @@ pub(crate) struct EffectMeta {
     pub auth_abort_handle: Option<(u64, tokio::task::AbortHandle)>,
     /// Auth URL poll abort handle and request sequence (installed on `AppView.auth_url_poll_handle` when the seq still matches).
     pub auth_url_poll_handle: Option<(u64, tokio::task::AbortHandle)>,
+    /// Paste sender for an in-flight provider OAuth login (installed on AppView).
+    pub provider_oauth_code_tx: Option<tokio::sync::mpsc::Sender<String>>,
+    /// Abort handle for the in-flight provider OAuth login task.
+    pub provider_oauth_abort: Option<tokio::task::AbortHandle>,
 }
 /// Extract the first user prompt text from a session's `chat_history.jsonl`.
 ///

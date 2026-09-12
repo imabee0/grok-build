@@ -124,14 +124,26 @@ pub(super) fn dispatch_copy_auth_url(
     app: &mut AppView,
     copy: impl FnOnce(&str) -> crate::clipboard::ClipboardDelivery,
 ) -> Vec<Effect> {
-    let AuthState::Authenticating {
-        auth_url: Some(url),
-        ..
-    } = &app.auth_state
-    else {
+    let url = match &app.auth_state {
+        AuthState::Authenticating {
+            auth_url: Some(url),
+            ..
+        } => Some(url.clone()),
+        _ => app
+            .provider_setup
+            .as_ref()
+            .and_then(|state| match &state.mode {
+                crate::views::provider_manager::ProviderMode::SigningIn {
+                    auth_url: Some(url),
+                    ..
+                } => Some(url.clone()),
+                _ => None,
+            }),
+    };
+    let Some(url) = url else {
         return vec![];
     };
-    app.auth_clipboard_delivery = Some(copy(url));
+    app.auth_clipboard_delivery = Some(copy(&url));
     app.auth_clipboard_feedback_generation = app.auth_clipboard_feedback_generation.wrapping_add(1);
     vec![Effect::ScheduleClearAuthCopyFeedback {
         generation: app.auth_clipboard_feedback_generation,
@@ -1189,6 +1201,12 @@ pub(crate) fn dispatch(action: Action, app: &mut AppView) -> Vec<Effect> {
         }
         Action::ProviderManagerOAuthLogin { provider_id } => {
             super::auth::dispatch_provider_manager_oauth_login(provider_id)
+        }
+        Action::ProviderManagerCancelOAuth => {
+            super::auth::dispatch_provider_manager_cancel_oauth(app)
+        }
+        Action::ProviderManagerSubmitOAuthCode(code) => {
+            super::auth::dispatch_provider_manager_submit_oauth_code(app, code)
         }
         Action::ProviderManagerReady => super::auth::dispatch_provider_manager_ready(app),
         Action::ProviderManagerDismissDefaultOffer => {

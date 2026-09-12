@@ -20,9 +20,9 @@ use crate::views::modal_window::{
 };
 use bcode_shell::auth::accounts::AccountKind;
 use bcode_shell::auth::provider_setup::{self, AccountStatus, CredentialSource, ProviderStatus};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEventKind};
 use ratatui::buffer::Buffer;
-use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::layout::{Constraint, Layout, Position, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Padding, Paragraph, Widget};
@@ -66,6 +66,8 @@ pub enum ProviderMode {
     SigningIn {
         provider_id: String,
         provider_name: String,
+        auth_url: Option<String>,
+        editor: LineEditor,
     },
     /// Naming a new account before its key-entry step.
     NamingAccount {
@@ -116,6 +118,12 @@ pub enum ProviderManagerOutcome {
     /// for the host to finish authentication anyway (the credential still
     /// resolves; the user just didn't want to change the default).
     DismissDefaultOffer,
+    /// First-run only: leave the app (the Quit row, or `q`).
+    Quit,
+    /// Abort an in-flight browser OAuth sign-in and return to Browse.
+    CancelOAuth,
+    /// User pasted or typed a callback URL / auth code during OAuth.
+    SubmitOAuthCode(String),
 }
 
 const MAX_KEY_BYTES: usize = 4000;
@@ -200,11 +208,48 @@ impl ProviderManagerState {
             || self.accounts.iter().any(|a| a.has_stored_key)
     }
 
-    fn row_count(&self) -> usize {
+    pub(crate) fn list_len(&self) -> usize {
         match self.tab {
             ProviderTab::Providers => self.providers.len(),
             ProviderTab::Accounts => self.accounts.len(),
         }
+    }
+
+    fn row_count(&self) -> usize {
+        let n = self.list_len();
+        if self.first_run && matches!(self.mode, ProviderMode::Browse) {
+            n + 1
+        } else {
+            n
+        }
+    }
+
+    fn is_quit_row(&self) -> bool {
+        self.first_run
+            && matches!(self.mode, ProviderMode::Browse)
+            && self.selected == self.list_len()
+    }
+
+    /// Welcome-menu rows for the first-run stacked layout: `(status, name)`,
+    /// plus a trailing Quit row so the screen is clickable like every other
+    /// blocked welcome state.
+    pub fn browse_menu_items(&self) -> Vec<(String, String)> {
+        let mut items: Vec<(String, String)> = match self.tab {
+            ProviderTab::Providers => self
+                .providers
+                .iter()
+                .map(|row| (provider_row_status(row), row.info.name.clone()))
+                .collect(),
+            ProviderTab::Accounts => self
+                .accounts
+                .iter()
+                .map(|row| (account_row_status(row), row.name.clone()))
+                .collect(),
+        };
+        if self.first_run {
+            items.push(("ctrl+q".to_string(), "Quit".to_string()));
+        }
+        items
     }
 
     fn selected_provider(&self) -> Option<&ProviderStatus> {
@@ -287,7 +332,23 @@ impl ProviderManagerState {
         self.reload(home);
         if matches!(&self.mode, ProviderMode::SigningIn { provider_id: id, .. } if id == provider_id)
         {
-            self.mode = ProviderMode::Browse;
+            self.mode = if self.auth_gated
+                && result.is_ok()
+                && self
+                    .providers
+                    .iter()
+                    .find(|p| p.info.id == provider_id)
+                    .is_some_and(|p| p.source.is_usable())
+            {
+                ProviderMode::OfferDefaultModel {
+                    provider_id: provider_id.to_string(),
+                    model: bcode_models::provider(provider_id)
+                        .map(|p| p.default_model.clone())
+                        .unwrap_or_default(),
+                }
+            } else {
+                ProviderMode::Browse
+            };
         }
         self.notice = Some(match result {
             Ok(()) => (format!("{provider_id}: signed in"), false),
@@ -295,18 +356,24 @@ impl ProviderManagerState {
         });
     }
 
+    pub fn set_oauth_url(&mut self, provider_id: &str, url: String) {
+        if let ProviderMode::SigningIn {
+            provider_id: id,
+            auth_url,
+            ..
+        } = &mut self.mode
+            && id == provider_id
+        {
+            *auth_url = Some(url);
+        }
+    }
+
     pub fn handle_key(&mut self, key: &KeyEvent) -> ProviderManagerOutcome {
         match &mut self.mode {
             ProviderMode::Browse => self.handle_browse_key(key),
             ProviderMode::EnteringKey { .. } => self.handle_entering_key(key),
             ProviderMode::Verifying { .. } => ProviderManagerOutcome::Unchanged,
-            ProviderMode::SigningIn { .. } => match key.code {
-                KeyCode::Esc if !self.first_run => {
-                    self.mode = ProviderMode::Browse;
-                    ProviderManagerOutcome::Changed
-                }
-                _ => ProviderManagerOutcome::Unchanged,
-            },
+            ProviderMode::SigningIn { .. } => self.handle_signing_in_key(key),
             ProviderMode::NamingAccount { .. } => self.handle_naming_account_key(key),
             ProviderMode::ConfirmRemove { target } => {
                 let target = target.clone();
@@ -354,19 +421,10 @@ impl ProviderManagerState {
                 }
                 ProviderManagerOutcome::Unchanged
             }
-            KeyCode::Tab | KeyCode::BackTab => {
-                self.tab = match self.tab {
-                    ProviderTab::Providers => ProviderTab::Accounts,
-                    ProviderTab::Accounts => ProviderTab::Providers,
-                };
-                self.window.active_tab = match self.tab {
-                    ProviderTab::Providers => 0,
-                    ProviderTab::Accounts => 1,
-                };
-                self.selected = 0;
-                self.notice = None;
-                ProviderManagerOutcome::Changed
-            }
+            KeyCode::Tab | KeyCode::BackTab => self.set_tab(match self.tab {
+                ProviderTab::Providers => ProviderTab::Accounts,
+                ProviderTab::Accounts => ProviderTab::Providers,
+            }),
             KeyCode::Char('a') if self.tab == ProviderTab::Accounts => {
                 self.mode = ProviderMode::NamingAccount {
                     editor: LineEditor::default(),
@@ -390,7 +448,12 @@ impl ProviderManagerState {
                 }
                 ProviderManagerOutcome::SetDefaultModel(provider.info.default_model.clone())
             }
+            KeyCode::Char('q') if self.first_run => ProviderManagerOutcome::Quit,
+            KeyCode::Char('p') => self.open_key_entry(),
             KeyCode::Enter => {
+                if self.is_quit_row() {
+                    return ProviderManagerOutcome::Quit;
+                }
                 let target = match self.tab {
                     ProviderTab::Providers => self
                         .selected_provider()
@@ -416,6 +479,8 @@ impl ProviderManagerState {
                     self.mode = ProviderMode::SigningIn {
                         provider_id: pid.clone(),
                         provider_name: pname,
+                        auth_url: None,
+                        editor: LineEditor::default(),
                     };
                     return ProviderManagerOutcome::OAuthLogin { provider_id: pid };
                 }
@@ -427,6 +492,111 @@ impl ProviderManagerState {
                 ProviderManagerOutcome::Changed
             }
             KeyCode::Esc if !self.first_run => ProviderManagerOutcome::Close,
+            _ => ProviderManagerOutcome::Unchanged,
+        }
+    }
+
+    fn set_tab(&mut self, tab: ProviderTab) -> ProviderManagerOutcome {
+        if self.tab == tab {
+            return ProviderManagerOutcome::Unchanged;
+        }
+        self.tab = tab;
+        self.window.active_tab = match self.tab {
+            ProviderTab::Providers => 0,
+            ProviderTab::Accounts => 1,
+        };
+        self.selected = 0;
+        self.notice = None;
+        ProviderManagerOutcome::Changed
+    }
+
+    /// Open masked key entry for the selected row, even if that provider
+    /// would otherwise start a browser OAuth flow on Enter.
+    fn open_key_entry(&mut self) -> ProviderManagerOutcome {
+        if self.is_quit_row() {
+            return ProviderManagerOutcome::Unchanged;
+        }
+        let target = match self.tab {
+            ProviderTab::Providers => self
+                .selected_provider()
+                .map(|p| KeyTarget::Provider(p.info.id.clone())),
+            ProviderTab::Accounts => self
+                .selected_account()
+                .map(|a| KeyTarget::Account(a.name.clone())),
+        };
+        let Some(target) = target else {
+            return ProviderManagerOutcome::Unchanged;
+        };
+        self.mode = ProviderMode::EnteringKey {
+            target,
+            editor: LineEditor::default(),
+            error: None,
+        };
+        ProviderManagerOutcome::Changed
+    }
+
+    /// Mouse on the first-run stacked layout. `row_rects` is one per
+    /// [`Self::browse_menu_items`] row; `tab_rects` is `[Providers, Accounts]`.
+    pub fn handle_mouse(
+        &mut self,
+        kind: MouseEventKind,
+        column: u16,
+        row: u16,
+        row_rects: &[Rect],
+        tab_rects: &[Rect],
+    ) -> ProviderManagerOutcome {
+        if !matches!(self.mode, ProviderMode::Browse) {
+            return match (&self.mode, kind) {
+                (
+                    ProviderMode::OfferDefaultModel { .. },
+                    MouseEventKind::Down(MouseButton::Left),
+                ) => self.handle_key(&KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+                (ProviderMode::ConfirmRemove { .. }, MouseEventKind::Down(MouseButton::Left)) => {
+                    self.handle_key(&KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE))
+                }
+                _ => ProviderManagerOutcome::Unchanged,
+            };
+        }
+        let pos = Position::new(column, row);
+        match kind {
+            MouseEventKind::Moved => {
+                for (i, rect) in row_rects.iter().enumerate() {
+                    if rect.contains(pos) && self.selected != i {
+                        self.selected = i;
+                        return ProviderManagerOutcome::Changed;
+                    }
+                }
+                ProviderManagerOutcome::Unchanged
+            }
+            MouseEventKind::Down(MouseButton::Left) => {
+                if tab_rects.first().is_some_and(|r| r.contains(pos)) {
+                    return self.set_tab(ProviderTab::Providers);
+                }
+                if tab_rects.get(1).is_some_and(|r| r.contains(pos)) {
+                    return self.set_tab(ProviderTab::Accounts);
+                }
+                for (i, rect) in row_rects.iter().enumerate() {
+                    if rect.contains(pos) {
+                        self.selected = i;
+                        return self.handle_key(&KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+                    }
+                }
+                ProviderManagerOutcome::Unchanged
+            }
+            _ => ProviderManagerOutcome::Unchanged,
+        }
+    }
+
+    pub fn handle_paste(&mut self, text: &str) -> ProviderManagerOutcome {
+        match &mut self.mode {
+            ProviderMode::EnteringKey { editor, .. } | ProviderMode::SigningIn { editor, .. } => {
+                let remaining = MAX_KEY_BYTES.saturating_sub(editor.text().len());
+                from_line_edit(editor.insert_paste_with_byte_limit(text, remaining))
+            }
+            ProviderMode::NamingAccount { editor, .. } => {
+                let remaining = MAX_ACCOUNT_NAME_BYTES.saturating_sub(editor.text().len());
+                from_line_edit(editor.insert_paste_with_byte_limit(text, remaining))
+            }
             _ => ProviderManagerOutcome::Unchanged,
         }
     }
@@ -444,6 +614,35 @@ impl ProviderManagerState {
                 .selected_account()
                 .filter(|a| a.has_stored_key)
                 .map(|a| KeyTarget::Account(a.name.clone())),
+        }
+    }
+
+    fn handle_signing_in_key(&mut self, key: &KeyEvent) -> ProviderManagerOutcome {
+        match key.code {
+            KeyCode::Esc => {
+                self.mode = ProviderMode::Browse;
+                ProviderManagerOutcome::CancelOAuth
+            }
+            KeyCode::Enter if key.modifiers.is_empty() => {
+                let ProviderMode::SigningIn { editor, .. } = &self.mode else {
+                    unreachable!("handle_signing_in_key called outside SigningIn");
+                };
+                let value = editor.text().trim().to_string();
+                if value.is_empty() {
+                    ProviderManagerOutcome::Unchanged
+                } else {
+                    ProviderManagerOutcome::SubmitOAuthCode(value)
+                }
+            }
+            _ => {
+                let ProviderMode::SigningIn { editor, .. } = &mut self.mode else {
+                    unreachable!("handle_signing_in_key called outside SigningIn");
+                };
+                let remaining = MAX_KEY_BYTES.saturating_sub(editor.text().len());
+                let outcome =
+                    editor.handle_key_with_insert_policy(key, |c| c.len_utf8() <= remaining);
+                from_line_edit(outcome)
+            }
         }
     }
 
@@ -565,6 +764,36 @@ fn source_badge(source: CredentialSource) -> (&'static str, bool) {
         CredentialSource::Env => ("from environment", false),
         CredentialSource::StoredAndEnv => ("from environment (stored key overridden)", false),
         CredentialSource::None => ("not configured", true),
+    }
+}
+
+fn provider_row_status(row: &ProviderStatus) -> String {
+    match row.source {
+        CredentialSource::Stored => "configured".to_string(),
+        CredentialSource::Env | CredentialSource::StoredAndEnv => "from environment".to_string(),
+        CredentialSource::None if row.info.auth.is_some() => {
+            match row.info.auth.as_ref().map(|a| &a.profile) {
+                Some(bcode_models::ProviderOAuthProfile::Chatgpt) => {
+                    "ChatGPT or API key".to_string()
+                }
+                Some(bcode_models::ProviderOAuthProfile::Oidc) | None => {
+                    "sign in or API key".to_string()
+                }
+            }
+        }
+        CredentialSource::None => "paste a key".to_string(),
+    }
+}
+
+fn account_row_status(row: &AccountStatus) -> String {
+    if row.has_stored_key {
+        "configured".to_string()
+    } else if let Some(env) = &row.env_key {
+        format!("from {env}")
+    } else if row.kind == AccountKind::Command {
+        "external command".to_string()
+    } else {
+        "paste a key".to_string()
     }
 }
 
@@ -856,7 +1085,12 @@ pub fn provider_manager_shortcuts(state: &ProviderManagerState) -> Vec<Shortcut<
         ProviderMode::Browse => {
             let mut shortcuts = vec![
                 Shortcut {
-                    label: "enter add/replace",
+                    label: "enter continue",
+                    clickable: false,
+                    id: 0,
+                },
+                Shortcut {
+                    label: "p paste a key",
                     clickable: false,
                     id: 0,
                 },
@@ -976,6 +1210,19 @@ pub fn render_provider_manager_fullscreen(
 }
 
 fn render_tab_line(area: Rect, buf: &mut Buffer, theme: &Theme, active: ProviderTab) {
+    let _ = render_centered_tabs(area, buf, theme, active);
+}
+
+/// Centered Providers / Accounts tabs. Returns a hit rect per tab, in that order.
+pub fn render_centered_tabs(
+    area: Rect,
+    buf: &mut Buffer,
+    theme: &Theme,
+    active: ProviderTab,
+) -> Vec<Rect> {
+    if area.height == 0 || area.width == 0 {
+        return Vec::new();
+    }
     let style = |tab: ProviderTab| {
         if tab == active {
             Style::default()
@@ -985,12 +1232,38 @@ fn render_tab_line(area: Rect, buf: &mut Buffer, theme: &Theme, active: Provider
             Style::default().fg(theme.gray)
         }
     };
-    let line = Line::from(vec![
-        Span::styled("Providers", style(ProviderTab::Providers)),
-        Span::styled("  ", Style::default()),
-        Span::styled("Accounts", style(ProviderTab::Accounts)),
-    ]);
-    buf.set_line(area.x, area.y, &line, area.width);
+    const PROVIDERS: &str = "Providers";
+    const ACCOUNTS: &str = "Accounts";
+    const GAP: u16 = 4;
+    let left_w = cols(PROVIDERS) as u16;
+    let right_w = cols(ACCOUNTS) as u16;
+    let total = left_w + GAP + right_w;
+    let start = area.x + area.width.saturating_sub(total) / 2;
+    let providers_rect = Rect {
+        x: start,
+        y: area.y,
+        width: left_w,
+        height: 1,
+    };
+    let accounts_rect = Rect {
+        x: start + left_w + GAP,
+        y: area.y,
+        width: right_w,
+        height: 1,
+    };
+    buf.set_span(
+        providers_rect.x,
+        providers_rect.y,
+        &Span::styled(PROVIDERS, style(ProviderTab::Providers)),
+        left_w,
+    );
+    buf.set_span(
+        accounts_rect.x,
+        accounts_rect.y,
+        &Span::styled(ACCOUNTS, style(ProviderTab::Accounts)),
+        right_w,
+    );
+    vec![providers_rect, accounts_rect]
 }
 
 /// Render the manager inside modal chrome (mid-session `/providers`, `/login`).
@@ -1134,6 +1407,89 @@ mod tests {
         assert!(s.first_run);
         let outcome = s.handle_key(&key(KeyCode::Esc));
         assert_eq!(outcome, ProviderManagerOutcome::Unchanged);
+    }
+
+    #[test]
+    fn first_run_escape_during_oauth_cancels() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut s = ProviderManagerState::first_run(dir.path());
+        s.mode = ProviderMode::SigningIn {
+            provider_id: "p".into(),
+            provider_name: "P".into(),
+            auth_url: None,
+            editor: LineEditor::default(),
+        };
+        assert_eq!(
+            s.handle_key(&key(KeyCode::Esc)),
+            ProviderManagerOutcome::CancelOAuth
+        );
+        assert!(matches!(s.mode, ProviderMode::Browse));
+    }
+
+    #[test]
+    fn first_run_quit_row_and_q_leave_the_app() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut s = ProviderManagerState::first_run(dir.path());
+        let items = s.browse_menu_items();
+        assert_eq!(items.last().map(|(_, n)| n.as_str()), Some("Quit"));
+        assert_eq!(s.row_count(), items.len());
+        s.selected = s.row_count() - 1;
+        assert_eq!(
+            s.handle_key(&key(KeyCode::Enter)),
+            ProviderManagerOutcome::Quit
+        );
+
+        let mut s = ProviderManagerState::first_run(dir.path());
+        assert_eq!(
+            s.handle_key(&key(KeyCode::Char('q'))),
+            ProviderManagerOutcome::Quit
+        );
+    }
+
+    #[test]
+    fn p_opens_key_entry_even_when_the_provider_has_oauth() {
+        let mut s = state();
+        let Some(idx) = s.providers.iter().position(|p| p.info.auth.is_some()) else {
+            return;
+        };
+        s.selected = idx;
+        let enter = s.handle_key(&key(KeyCode::Enter));
+        assert!(
+            matches!(enter, ProviderManagerOutcome::OAuthLogin { .. }),
+            "Enter on an OAuth provider starts the browser flow: {enter:?}"
+        );
+        s.mode = ProviderMode::Browse;
+        let outcome = s.handle_key(&key(KeyCode::Char('p')));
+        assert_eq!(outcome, ProviderManagerOutcome::Changed);
+        assert!(
+            matches!(s.mode, ProviderMode::EnteringKey { .. }),
+            "p must open key entry, got {:?}",
+            s.mode
+        );
+    }
+
+    #[test]
+    fn click_on_a_row_matches_enter() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut s = ProviderManagerState::first_run(dir.path());
+        let n = s.list_len();
+        let row_rects: Vec<Rect> = (0..=n)
+            .map(|i| Rect::new(10, 10 + i as u16, 40, 1))
+            .collect();
+        let quit = s.handle_mouse(
+            MouseEventKind::Down(MouseButton::Left),
+            12,
+            10 + n as u16,
+            &row_rects,
+            &[],
+        );
+        assert_eq!(quit, ProviderManagerOutcome::Quit);
+
+        s.selected = 0;
+        s.mode = ProviderMode::Browse;
+        let hover = s.handle_mouse(MouseEventKind::Moved, 12, 11, &row_rects, &[]);
+        assert_eq!(hover, ProviderManagerOutcome::Changed);
+        assert_eq!(s.selected, 1);
     }
 
     #[test]
