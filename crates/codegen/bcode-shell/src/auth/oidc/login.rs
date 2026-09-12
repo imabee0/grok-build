@@ -255,7 +255,7 @@ async fn race_callback_and_client_ui(
 ) -> anyhow::Result<Callback> {
     tracing::debug!("OIDC: waiting for auth code (loopback + client paste)");
     let (tx, mut rx) = tokio::sync::mpsc::channel::<CallbackResult>(1);
-    let servers = spawn_callback_servers(bind.listeners, callback_path, tx.clone());
+    let (servers, shutdown) = spawn_callback_servers(bind.listeners, callback_path, tx.clone());
 
     // Bridge client paste input into the callback channel.
     let client_tx = tx.clone();
@@ -287,9 +287,7 @@ async fn race_callback_and_client_ui(
         }
     };
 
-    for server in servers {
-        server.abort();
-    }
+    shutdown_callback_servers(shutdown, servers).await;
 
     result.map_err(|e| anyhow::Error::new(OidcError::CallbackAuthFailed(e)))
 }
@@ -298,16 +296,39 @@ fn spawn_callback_servers(
     listeners: Vec<TcpListener>,
     callback_path: &str,
     tx: tokio::sync::mpsc::Sender<CallbackResult>,
-) -> Vec<tokio::task::JoinHandle<()>> {
-    listeners
+) -> (
+    Vec<tokio::task::JoinHandle<()>>,
+    tokio::sync::watch::Sender<bool>,
+) {
+    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+    let servers = listeners
         .into_iter()
         .map(|listener| {
             let app = build_callback_router(tx.clone(), callback_path);
+            let mut stop = shutdown_rx.clone();
             tokio::spawn(async move {
-                let _ = axum::serve(listener, app).await;
+                let _ = axum::serve(listener, app)
+                    .with_graceful_shutdown(async move {
+                        let _ = stop.wait_for(|stop| *stop).await;
+                    })
+                    .await;
             })
         })
-        .collect()
+        .collect();
+    (servers, shutdown_tx)
+}
+
+/// Finish in-flight callback responses (the "return to bcode" page) before
+/// dropping the listeners. Aborting here left the browser on a failed
+/// connection instead of the success page.
+async fn shutdown_callback_servers(
+    shutdown: tokio::sync::watch::Sender<bool>,
+    servers: Vec<tokio::task::JoinHandle<()>>,
+) {
+    let _ = shutdown.send(true);
+    for server in servers {
+        let _ = server.await;
+    }
 }
 
 /// Race loopback callback against stdin paste.
@@ -321,7 +342,7 @@ async fn race_callback_and_stdin(
         "OIDC: waiting for auth code (loopback + stdin)"
     );
     let (tx, mut rx) = tokio::sync::mpsc::channel::<CallbackResult>(1);
-    let servers = spawn_callback_servers(bind.listeners, callback_path, tx.clone());
+    let (servers, shutdown) = spawn_callback_servers(bind.listeners, callback_path, tx.clone());
 
     if enable_stdin {
         spawn_stdin_reader(tx.clone());
@@ -343,9 +364,7 @@ async fn race_callback_and_stdin(
             anyhow::Error::new(OidcError::CallbackChannelClosed)
         })?;
 
-    for server in servers {
-        server.abort();
-    }
+    shutdown_callback_servers(shutdown, servers).await;
 
     result.map_err(|e| anyhow::Error::new(OidcError::CallbackAuthFailed(e)))
 }
@@ -883,19 +902,26 @@ mod tests {
         );
 
         // Simulate browser callback via race_callback_and_stdin
+        let (callback, page) =
+            tokio::join!(race_callback_and_stdin(bind, false, "/callback"), async {
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                reqwest::get(format!(
+                    "http://127.0.0.1:{port}/callback?code=mock-auth-code&state={state}"
+                ))
+                .await
+                .unwrap()
+                .text()
+                .await
+                .unwrap()
+            });
         let Callback {
             code,
             state: received_state,
-        } = tokio::join!(race_callback_and_stdin(bind, false, "/callback"), async {
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-            reqwest::get(format!(
-                "http://127.0.0.1:{port}/callback?code=mock-auth-code&state={state}"
-            ))
-            .await
-            .unwrap();
-        })
-        .0
-        .unwrap();
+        } = callback.unwrap();
+        assert!(
+            page.contains("return to bcode"),
+            "callback page must flush before the server shuts down, got {page:?}"
+        );
 
         assert_eq!(code, "mock-auth-code");
         assert_eq!(received_state, state);
