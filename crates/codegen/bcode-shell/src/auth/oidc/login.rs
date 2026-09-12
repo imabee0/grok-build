@@ -628,6 +628,11 @@ async fn run_provider_chatgpt_login(
         issuer = %auth.issuer,
         "provider OAuth: starting ChatGPT login flow"
     );
+    bcode_telemetry::unified_log::info(
+        "provider OAuth: starting ChatGPT login flow",
+        None,
+        Some(serde_json::json!({ "provider": provider_id })),
+    );
     crate::auth::jwt::ensure_crypto_provider();
     let pkce = generate_pkce();
     let state = uuid::Uuid::now_v7().to_string();
@@ -695,7 +700,8 @@ async fn run_provider_chatgpt_login(
         .id_token
         .as_deref()
         .ok_or_else(|| anyhow::Error::new(OidcError::MissingIdToken))?;
-    let api_key = super::chatgpt::obtain_api_key(auth, id_token).await?;
+    let minted = super::chatgpt::obtain_api_key(auth, id_token).await;
+    let api_key = chatgpt_stored_key(minted, tokens.access_token.clone());
 
     let mut auth_record = build_bcode_auth(
         tokens,
@@ -711,9 +717,57 @@ async fn run_provider_chatgpt_login(
         provider_id,
         auth_record.clone(),
     )
-    .map_err(|e| anyhow::anyhow!("failed to store {provider_id}'s credential: {e}"))?;
+    .map_err(|e| {
+        bcode_telemetry::unified_log::error(
+            "provider OAuth: failed to store ChatGPT credential",
+            None,
+            Some(serde_json::json!({
+                "provider": provider_id,
+                "error": e.to_string(),
+            })),
+        );
+        anyhow::anyhow!("failed to store {provider_id}'s credential: {e}")
+    })?;
     tracing::info!(provider = %provider_id, "provider OAuth: ChatGPT login complete, credentials saved");
+    bcode_telemetry::unified_log::info(
+        "provider OAuth: ChatGPT login complete, credentials saved",
+        None,
+        Some(serde_json::json!({ "provider": provider_id })),
+    );
     Ok(auth_record)
+}
+
+/// The ChatGPT token-exchange that mints a platform API key is best-effort:
+/// the authorization-code grant already produced a usable access token.
+/// Requiring the mint left the callback page saying "signed in" while
+/// `auth.json` stayed empty, so the TUI kept asking to log in.
+fn chatgpt_stored_key(mint: Result<String, anyhow::Error>, access_token: String) -> String {
+    match mint {
+        Ok(key) if !key.trim().is_empty() => key,
+        Ok(_) => {
+            tracing::warn!(
+                "ChatGPT: token-exchange returned an empty API key; storing the access token"
+            );
+            bcode_telemetry::unified_log::warn(
+                "ChatGPT: empty API key mint; storing access token",
+                None,
+                None,
+            );
+            access_token
+        }
+        Err(e) => {
+            tracing::warn!(
+                error = %e,
+                "ChatGPT: API key mint failed; storing the access token"
+            );
+            bcode_telemetry::unified_log::warn(
+                "ChatGPT: API key mint failed; storing access token",
+                None,
+                Some(serde_json::json!({ "error": e.to_string() })),
+            );
+            access_token
+        }
+    }
 }
 
 /// The identity record a provider credential carries: `user_id` names the
@@ -856,6 +910,26 @@ type CallbackResult = Result<Callback, String>;
 mod tests {
     use super::super::test_helpers::*;
     use super::*;
+
+    #[test]
+    fn chatgpt_stored_key_keeps_the_mint_when_it_is_non_empty() {
+        assert_eq!(
+            chatgpt_stored_key(Ok("sk-minted".into()), "access-jwt".into()),
+            "sk-minted"
+        );
+    }
+
+    #[test]
+    fn chatgpt_stored_key_falls_back_to_the_access_token_when_mint_fails() {
+        assert_eq!(
+            chatgpt_stored_key(Err(anyhow::anyhow!("http 400")), "access-jwt".into()),
+            "access-jwt"
+        );
+        assert_eq!(
+            chatgpt_stored_key(Ok("  ".into()), "access-jwt".into()),
+            "access-jwt"
+        );
+    }
 
     #[test]
     fn callback_success_page_uses_the_bcode_mark() {

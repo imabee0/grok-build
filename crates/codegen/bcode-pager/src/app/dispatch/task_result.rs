@@ -1,7 +1,7 @@
 //! Async task-result application: routes task results into state.
 use super::auth::{
-    ensure_login_method, handle_auth_complete, handle_auth_url_ready, handle_mcp_auth_trigger_done,
-    handle_mcp_setup_submit_done,
+    ensure_login_method, handle_auth_complete, handle_auth_failed, handle_auth_url_ready,
+    handle_mcp_auth_trigger_done, handle_mcp_setup_submit_done,
 };
 use super::billing::{
     PAYWALL_AUTO_CHECK_TIMEOUT, apply_auto_topup, handle_billing_fetched,
@@ -947,16 +947,7 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
             vec![]
         }
         TaskResult::AuthFailed { request_seq, error } => {
-            if let AuthState::Authenticating {
-                request_seq: current_seq,
-                ..
-            } = &app.auth_state
-                && *current_seq == request_seq
-            {
-                app.auth_state = AuthState::Pending { error: Some(error) };
-                app.auth_code_input.reset();
-            }
-            vec![]
+            handle_auth_failed(app, request_seq, error)
         }
         TaskResult::AuthUrlReady {
             request_seq,

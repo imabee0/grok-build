@@ -1024,10 +1024,12 @@ fn render_welcome_provider_browse(
     } else {
         "Named accounts"
     };
-    let subtitle = if state.tab == ProviderTab::Providers {
-        "One credential covers every model on that provider."
-    } else {
-        "Named accounts store a key of their own."
+    let (subtitle, subtitle_is_error) = match &state.notice {
+        Some((msg, is_error)) => (msg.as_str(), *is_error),
+        None if state.tab == ProviderTab::Providers => {
+            ("One credential covers every model on that provider.", false)
+        }
+        None => ("Named accounts store a key of their own.", false),
     };
 
     let layout = WelcomeLayout::compute_stacked(WelcomeLayoutInput {
@@ -1062,7 +1064,11 @@ fn render_welcome_provider_browse(
     Paragraph::new(
         Line::from(Span::styled(
             subtitle,
-            Style::default().fg(theme.gray_bright),
+            Style::default().fg(if subtitle_is_error {
+                theme.accent_error
+            } else {
+                theme.gray_bright
+            }),
         ))
         .alignment(Alignment::Center),
     )
@@ -3115,6 +3121,28 @@ mod tests {
             result.provider_tab_rects.len(),
             2,
             "Providers and Accounts tabs must be hit-testable"
+        );
+    }
+
+    #[test]
+    fn fresh_user_welcome_shows_a_sign_in_error_notice() {
+        let auth = AuthState::Pending { error: None };
+        let trust = TrustState::Done;
+        let home = tempfile::tempdir().expect("tempdir");
+        let mut state =
+            crate::views::provider_manager::ProviderManagerState::first_run(home.path());
+        state.notice = Some(("openai: sign-in failed: HTTP 400".into(), true));
+        let mut params = render_params(&auth, &trust, None);
+        params.provider_setup = Some(&state);
+        let area = Rect::new(0, 0, 100, 40);
+        let mut buf = Buffer::empty(area);
+        let mut prompt = PromptWidget::new();
+        let mut picker = PickerState::default();
+        render_welcome(area, &mut buf, &params, &mut prompt, &mut picker);
+        let text = buffer_text(&buf);
+        assert!(
+            text.contains("openai: sign-in failed: HTTP 400"),
+            "first-run browse must surface the sign-in error, not swallow it:\n{text}"
         );
     }
 

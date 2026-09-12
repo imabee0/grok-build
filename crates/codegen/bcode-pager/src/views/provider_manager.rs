@@ -1493,6 +1493,37 @@ mod tests {
     }
 
     #[test]
+    fn successful_oauth_in_an_auth_gated_manager_offers_the_default_model() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut s = ProviderManagerState::first_run(dir.path());
+        let Some(idx) = s.providers.iter().position(|p| p.info.auth.is_some()) else {
+            return;
+        };
+        let id = s.providers[idx].info.id.clone();
+        let default_model = s.providers[idx].info.default_model.clone();
+        provider_setup::store_provider_credential(dir.path(), &id, "sk-test-1234").expect("store");
+        s.mode = ProviderMode::SigningIn {
+            provider_id: id.clone(),
+            provider_name: "P".into(),
+            auth_url: None,
+            editor: LineEditor::default(),
+        };
+        s.finish_oauth(dir.path(), &id, Ok(()));
+        let ProviderMode::OfferDefaultModel { provider_id, model } = &s.mode else {
+            panic!("expected OfferDefaultModel, got {:?}", s.mode);
+        };
+        assert_eq!(provider_id, &id);
+        assert_eq!(model, &default_model);
+        assert!(
+            s.notice
+                .as_ref()
+                .is_some_and(|(m, err)| !*err && m == &format!("{id}: signed in")),
+            "expected signed-in notice, got {:?}",
+            s.notice
+        );
+    }
+
+    #[test]
     fn successful_store_in_an_auth_gated_manager_offers_the_default_model() {
         let dir = tempfile::tempdir().expect("tempdir");
         let mut s = ProviderManagerState::first_run(dir.path());
