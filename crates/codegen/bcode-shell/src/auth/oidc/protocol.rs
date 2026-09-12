@@ -397,24 +397,23 @@ pub(super) async fn exchange_code(
     redirect_uri: &str,
     client_id: &str,
     code_verifier: &str,
+    attach_client_version: bool,
 ) -> anyhow::Result<TokenResponse> {
     tracing::debug!(token_endpoint = %token_endpoint, "OIDC: exchanging code for tokens");
-    let resp = with_alpha_test_key(
-        crate::http::shared_client()
-            .post(token_endpoint)
-            .header("x-bcode-client-version", bcode_version::VERSION)
-            .form(&[
-                ("grant_type", "authorization_code"),
-                ("code", code),
-                ("redirect_uri", redirect_uri),
-                ("client_id", client_id),
-                ("code_verifier", code_verifier),
-            ])
-            .timeout(std::time::Duration::from_secs(15)),
-        token_endpoint,
-    )
-    .send()
-    .await?;
+    let mut req = crate::http::shared_client()
+        .post(token_endpoint)
+        .form(&[
+            ("grant_type", "authorization_code"),
+            ("code", code),
+            ("redirect_uri", redirect_uri),
+            ("client_id", client_id),
+            ("code_verifier", code_verifier),
+        ])
+        .timeout(std::time::Duration::from_secs(15));
+    if attach_client_version {
+        req = req.header("x-bcode-client-version", bcode_version::VERSION);
+    }
+    let resp = with_alpha_test_key(req, token_endpoint).send().await?;
     if !resp.status().is_success() {
         let status = resp.status().as_u16();
         let body = resp.text().await.unwrap_or_default();

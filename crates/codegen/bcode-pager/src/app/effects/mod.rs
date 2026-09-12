@@ -201,23 +201,32 @@ pub(crate) fn execute(
                     });
                 }
                 Some(auth) => {
+                    let auth = auth.clone();
                     let (url_tx, url_rx) =
                         tokio::sync::oneshot::channel::<bcode_shell::auth::AuthUrlInfo>();
-                    let (_code_tx, code_rx) = tokio::sync::mpsc::channel::<String>(1);
-                    // The browser opens automatically; the loopback callback
-                    // completes the flow. The URL receiver is dropped (no
-                    // in-modal URL surface), and the paste channel is held open
-                    // so the loopback race stays the only completion path.
-                    drop(url_rx);
+                    let (code_tx, code_rx) = tokio::sync::mpsc::channel::<String>(1);
                     let channels = bcode_shell::auth::AuthChannels {
                         url_tx: Some(url_tx),
                         code_rx,
                     };
+                    let pid_url = provider_id.clone();
                     tasks.spawn(async move {
+                        match url_rx.await {
+                            Ok(info) => TaskResult::ProviderOAuthUrl {
+                                provider_id: pid_url,
+                                url: info.url,
+                            },
+                            Err(_) => TaskResult::ProviderOAuthUrl {
+                                provider_id: pid_url,
+                                url: String::new(),
+                            },
+                        }
+                    });
+                    let abort_handle = tasks.spawn(async move {
                         let result = bcode_shell::auth::oidc::run_provider_oauth_login(
                             &provider_id,
                             &provider_name,
-                            auth,
+                            &auth,
                             Some(channels),
                         )
                         .await
@@ -228,6 +237,8 @@ pub(crate) fn execute(
                             result,
                         }
                     });
+                    meta.provider_oauth_code_tx = Some(code_tx);
+                    meta.provider_oauth_abort = Some(abort_handle);
                 }
             }
         }

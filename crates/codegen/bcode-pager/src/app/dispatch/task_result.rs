@@ -938,6 +938,14 @@ pub(super) fn dispatch_task_result(result: TaskResult, app: &mut AppView) -> Vec
             provider_id,
             result,
         } => super::auth::handle_provider_oauth_login_done(app, provider_id, result),
+        TaskResult::ProviderOAuthUrl { provider_id, url } => {
+            if let Some(state) = app.provider_setup.as_mut()
+                && !url.is_empty()
+            {
+                state.set_oauth_url(&provider_id, url);
+            }
+            vec![]
+        }
         TaskResult::AuthFailed { request_seq, error } => {
             if let AuthState::Authenticating {
                 request_seq: current_seq,

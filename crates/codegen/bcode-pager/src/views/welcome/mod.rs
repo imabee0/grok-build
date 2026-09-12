@@ -103,11 +103,6 @@ const H_MARGIN_COMPACT: u16 = 1;
 /// The extra 10 columns leave breathing room.
 const MENU_MIN_WIDTH: u16 = 51;
 
-/// Width of the first-run provider manager column, wide enough for the
-/// longest status badge ("from environment (stored key overridden)" = 42
-/// cols) plus a name column and marker, without needing per-frame reflow.
-const PROVIDER_MANAGER_WIDTH: u16 = 70;
-
 /// Whether the welcome prompt is currently focused (accepting text input).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum WelcomePromptFocus {
@@ -125,6 +120,8 @@ pub struct WelcomeRenderResult {
     pub post_flush_escapes: Option<crate::terminal::overlay::PostFlush>,
     /// Hit-test rects for each menu item (for click/hover).
     pub menu_rects: Vec<Rect>,
+    /// Hit-test rects for the first-run Providers / Accounts tabs.
+    pub provider_tab_rects: Vec<Rect>,
     /// Hit-test rect for the prompt input area (for click to start session).
     pub prompt_rect: Option<Rect>,
     /// Hit-test rect for the import-claude banner (for click to open import modal).
@@ -724,22 +721,11 @@ pub fn render_welcome(
 
     let mut result = match params.auth_state {
         AuthState::Pending { error: _ } if params.provider_setup.is_some() => {
-            // Rendered borderless full-screen in both the first-run and the
-            // mid-session `/login`-detour case: the welcome screen has no
-            // other content to preserve behind it while this is showing.
-            // The bordered modal chrome is for the mid-session `/providers`
-            // overlay on top of a real agent view (not wired through here).
+            // First-run / reauth: stacked welcome (logo, title, option rows)
+            // matching every other blocked screen. Mid-session `/providers`
+            // uses modal chrome and is not wired through here.
             let state = params.provider_setup.expect("checked by this arm's guard");
-            let pm_width = PROVIDER_MANAGER_WIDTH.min(content_area.width);
-            let [_, pm_area, _] = Layout::horizontal([
-                Constraint::Min(0),
-                Constraint::Length(pm_width),
-                Constraint::Min(0),
-            ])
-            .flex(Flex::Center)
-            .areas(content_area);
-            crate::views::provider_manager::render_provider_manager_fullscreen(pm_area, buf, state);
-            WelcomeRenderResult::default()
+            render_welcome_provider_setup(content_area, buf, params, state, h_margin)
         }
         AuthState::Pending { error } => {
             let label = params.login_label.unwrap_or("a provider");
@@ -865,6 +851,378 @@ pub fn render_welcome(
         result.post_flush_escapes = crate::terminal::overlay::clear().map(Into::into);
     }
     result
+}
+
+/// First-open / reauth provider picker: the existing bcode mark, then login
+/// options under it, same stacked rhythm as [`render_welcome_blocked`].
+fn render_welcome_provider_setup(
+    content_area: Rect,
+    buf: &mut Buffer,
+    params: &WelcomeRenderParams<'_>,
+    state: &crate::views::provider_manager::ProviderManagerState,
+    h_margin: u16,
+) -> WelcomeRenderResult {
+    use crate::views::provider_manager::ProviderMode;
+
+    match &state.mode {
+        ProviderMode::Browse => {
+            render_welcome_provider_browse(content_area, buf, params, state, h_margin)
+        }
+        ProviderMode::SigningIn { .. } => {
+            render_welcome_provider_oauth(content_area, buf, params, state, h_margin)
+        }
+        _ => render_welcome_provider_busy(content_area, buf, params, state, h_margin),
+    }
+}
+
+fn render_welcome_provider_oauth(
+    content_area: Rect,
+    buf: &mut Buffer,
+    params: &WelcomeRenderParams<'_>,
+    state: &crate::views::provider_manager::ProviderManagerState,
+    h_margin: u16,
+) -> WelcomeRenderResult {
+    use crate::views::provider_manager::ProviderMode;
+
+    let theme = Theme::current();
+    let ProviderMode::SigningIn {
+        provider_name,
+        auth_url,
+        editor,
+        ..
+    } = &state.mode
+    else {
+        return WelcomeRenderResult::default();
+    };
+
+    let llc = logo_line_count(content_area.height);
+    let top_pad = content_area.height.saturating_sub(llc) / 10;
+    let h_pad: u16 = content_area.width / 6;
+    let inner_width = content_area.width.saturating_sub(h_pad * 2).max(1);
+    let header = format!("Signing in with {provider_name} in your browser.");
+    let msg_height = if auth_url.is_some() {
+        (header.len() as u16).div_ceil(inner_width) + auth_copy_block_rows(inner_width)
+    } else {
+        2
+    };
+    let [_, logo_area, _, msg_area, _, prompt_area, _, hint_area, _] = Layout::vertical([
+        Constraint::Length(top_pad),
+        Constraint::Length(llc),
+        Constraint::Length(1),
+        Constraint::Length(msg_height),
+        Constraint::Min(1),
+        Constraint::Length(5),
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Min(0),
+    ])
+    .areas(content_area);
+
+    render_logo(logo_area, buf, &theme, content_area.height);
+
+    let mut lines: Vec<Line> = Vec::new();
+    lines.push(
+        Line::from(Span::styled(
+            header.clone(),
+            Style::default().fg(theme.gray_bright),
+        ))
+        .alignment(Alignment::Center),
+    );
+    if auth_url.is_some() {
+        push_auth_copy_block(&mut lines, &theme, params.clipboard_delivery);
+    } else {
+        lines.push(
+            Line::from(Span::styled(
+                "Waiting for auth URL...",
+                Style::default().fg(theme.gray),
+            ))
+            .alignment(Alignment::Center),
+        );
+    }
+    Paragraph::new(lines)
+        .wrap(Wrap { trim: false })
+        .block(Block::default().padding(Padding::horizontal(h_pad)))
+        .render(msg_area, buf);
+
+    let (auth_url_rect, auth_fallback_rect) = if auth_url.is_some() {
+        auth_hit_rects(msg_area, h_pad, inner_width, &header, 0)
+    } else {
+        (None, None)
+    };
+
+    crate::views::masked_input::render_masked_input_box(
+        prompt_area,
+        buf,
+        &theme,
+        editor.text(),
+        editor.cursor_byte(),
+        "Paste the callback URL here...",
+    );
+
+    let hints = Line::from(vec![
+        Span::styled(
+            "enter",
+            Style::default()
+                .fg(theme.accent_user)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled("  submit    ", Style::default().fg(theme.gray)),
+        Span::styled(
+            "esc",
+            Style::default()
+                .fg(theme.accent_user)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled("  cancel    ", Style::default().fg(theme.gray)),
+    ]);
+    let mut hint_spans = hints.spans;
+    hint_spans.extend(quit_hint_spans(&theme));
+    let hints = Line::from(hint_spans).alignment(Alignment::Center);
+    Paragraph::new(hints).render(hint_area, buf);
+
+    render_version_badge(
+        Rect {
+            x: content_area.x,
+            y: content_area.y + content_area.height.saturating_sub(1),
+            width: content_area.width,
+            height: 1,
+        },
+        buf,
+        &theme,
+        None,
+        h_margin,
+        false,
+        VersionBadgeMode::Full {
+            subscription_tier: None,
+        },
+    );
+
+    WelcomeRenderResult {
+        auth_url_rect,
+        auth_fallback_rect,
+        ..Default::default()
+    }
+}
+
+fn render_welcome_provider_browse(
+    content_area: Rect,
+    buf: &mut Buffer,
+    params: &WelcomeRenderParams<'_>,
+    state: &crate::views::provider_manager::ProviderManagerState,
+    h_margin: u16,
+) -> WelcomeRenderResult {
+    use crate::views::provider_manager::{ProviderTab, render_centered_tabs};
+
+    let theme = Theme::current();
+    let owned = state.browse_menu_items();
+    let menu_items: Vec<(&str, &str)> = owned
+        .iter()
+        .map(|(status, name)| (status.as_str(), name.as_str()))
+        .collect();
+    let title = if state.tab == ProviderTab::Providers {
+        "Sign in to a provider"
+    } else {
+        "Named accounts"
+    };
+    let subtitle = if state.tab == ProviderTab::Providers {
+        "One credential covers every model on that provider."
+    } else {
+        "Named accounts store a key of their own."
+    };
+
+    let layout = WelcomeLayout::compute_stacked(WelcomeLayoutInput {
+        content_area,
+        error_height: 3,
+        menu_height: menu_items.len() as u16,
+        tip_height: 1,
+        compact: params.compact,
+        prompt_compact: params.compact,
+        prompt_height: Some(0),
+        ..Default::default()
+    });
+
+    render_logo(layout.logo, buf, &theme, content_area.height);
+
+    let [title_area, subtitle_area, tabs_area] = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
+    ])
+    .areas(layout.error);
+    Paragraph::new(
+        Line::from(Span::styled(
+            title,
+            Style::default()
+                .fg(theme.text_primary)
+                .add_modifier(Modifier::BOLD),
+        ))
+        .alignment(Alignment::Center),
+    )
+    .render(title_area, buf);
+    Paragraph::new(
+        Line::from(Span::styled(
+            subtitle,
+            Style::default().fg(theme.gray_bright),
+        ))
+        .alignment(Alignment::Center),
+    )
+    .render(subtitle_area, buf);
+    let provider_tab_rects = render_centered_tabs(tabs_area, buf, &theme, state.tab);
+
+    let menu_area = inset_horizontal(layout.menu, prompt::prompt_inset(params.compact));
+    let menu_rects = render_menu(
+        menu_area,
+        buf,
+        &theme,
+        &menu_items,
+        Some(state.selected),
+        params.mouse_pos,
+        MENU_MIN_WIDTH,
+    );
+
+    if layout.tip.height > 0 {
+        render_provider_setup_hints(layout.tip, buf, &theme, state);
+    }
+
+    render_version_badge(
+        layout.version,
+        buf,
+        &theme,
+        None,
+        h_margin,
+        false,
+        VersionBadgeMode::Full {
+            subscription_tier: None,
+        },
+    );
+
+    WelcomeRenderResult {
+        menu_rects,
+        provider_tab_rects,
+        ..Default::default()
+    }
+}
+
+fn render_welcome_provider_busy(
+    content_area: Rect,
+    buf: &mut Buffer,
+    params: &WelcomeRenderParams<'_>,
+    state: &crate::views::provider_manager::ProviderManagerState,
+    h_margin: u16,
+) -> WelcomeRenderResult {
+    use crate::views::provider_manager::ProviderMode;
+
+    let theme = Theme::current();
+    let detail_height = match &state.mode {
+        ProviderMode::EnteringKey { .. } | ProviderMode::Verifying { .. } => 4,
+        ProviderMode::NamingAccount { .. } => 3,
+        ProviderMode::ConfirmRemove { .. }
+        | ProviderMode::OfferDefaultModel { .. }
+        | ProviderMode::SigningIn { .. } => 2,
+        ProviderMode::Browse => 0,
+    };
+    let layout = WelcomeLayout::compute_stacked(WelcomeLayoutInput {
+        content_area,
+        error_height: 1,
+        menu_height: state.list_len() as u16,
+        tip_height: 1,
+        compact: params.compact,
+        prompt_compact: params.compact,
+        prompt_height: Some(detail_height),
+        ..Default::default()
+    });
+
+    render_logo(layout.logo, buf, &theme, content_area.height);
+    Paragraph::new(
+        Line::from(Span::styled(
+            "Sign in to a provider",
+            Style::default()
+                .fg(theme.text_primary)
+                .add_modifier(Modifier::BOLD),
+        ))
+        .alignment(Alignment::Center),
+    )
+    .render(layout.error, buf);
+
+    let body = Rect {
+        x: layout.menu.x,
+        y: layout.menu.y,
+        width: layout.menu.width,
+        height: layout.menu.height.saturating_add(layout.prompt.height),
+    };
+    let body = inset_horizontal(body, prompt::prompt_inset(params.compact));
+    crate::views::provider_manager::render_provider_manager_content(body, buf, state);
+
+    if layout.tip.height > 0 {
+        render_provider_setup_hints(layout.tip, buf, &theme, state);
+    }
+
+    render_version_badge(
+        layout.version,
+        buf,
+        &theme,
+        None,
+        h_margin,
+        false,
+        VersionBadgeMode::Full {
+            subscription_tier: None,
+        },
+    );
+
+    WelcomeRenderResult::default()
+}
+
+fn render_provider_setup_hints(
+    area: Rect,
+    buf: &mut Buffer,
+    theme: &Theme,
+    state: &crate::views::provider_manager::ProviderManagerState,
+) {
+    use crate::views::provider_manager::{ProviderMode, ProviderTab};
+
+    let key = |label: &'static str| {
+        Span::styled(
+            label,
+            Style::default()
+                .fg(theme.accent_user)
+                .add_modifier(Modifier::BOLD),
+        )
+    };
+    let dim = |label: &'static str| Span::styled(label, Style::default().fg(theme.gray));
+    let mut spans = match &state.mode {
+        ProviderMode::Browse => {
+            let mut spans = vec![
+                key("enter"),
+                dim("  continue    "),
+                key("p"),
+                dim("  paste a key    "),
+                key("tab"),
+                dim("  switch list"),
+            ];
+            if state.tab == ProviderTab::Accounts {
+                spans.extend([dim("    "), key("a"), dim("  add account")]);
+            }
+            spans
+        }
+        ProviderMode::EnteringKey { .. } | ProviderMode::NamingAccount { .. } => {
+            vec![key("enter"), dim("  save    "), key("esc"), dim("  cancel")]
+        }
+        ProviderMode::SigningIn { .. } => vec![key("esc"), dim("  cancel")],
+        ProviderMode::ConfirmRemove { .. } => {
+            vec![key("y"), dim("  remove    "), key("n"), dim("  cancel")]
+        }
+        ProviderMode::OfferDefaultModel { .. } => vec![
+            key("enter"),
+            dim("  use as default    "),
+            key("n"),
+            dim("  skip"),
+        ],
+        ProviderMode::Verifying { .. } => Vec::new(),
+    };
+    if state.first_run && matches!(state.mode, ProviderMode::Browse) {
+        spans.extend([dim("    "), key("q"), dim("  quit")]);
+    }
+    Paragraph::new(Line::from(spans).alignment(Alignment::Center)).render(area, buf);
 }
 
 /// Render a blocked welcome screen: logo, optional message, menu, version.
@@ -2255,6 +2613,7 @@ fn render_welcome_done(
         cursor_pos,
         post_flush_escapes,
         menu_rects,
+        provider_tab_rects: Vec::new(),
         prompt_rect: if show_picker || !p.has_access {
             None
         } else {
@@ -2713,7 +3072,12 @@ mod tests {
         let state = crate::views::provider_manager::ProviderManagerState::first_run(home.path());
         let mut params = render_params(&auth, &trust, None);
         params.provider_setup = Some(&state);
-        let text = render_done_text(&params);
+        let area = Rect::new(0, 0, 100, 40);
+        let mut buf = Buffer::empty(area);
+        let mut prompt = PromptWidget::new();
+        let mut picker = PickerState::default();
+        let result = render_welcome(area, &mut buf, &params, &mut prompt, &mut picker);
+        let text = buffer_text(&buf);
 
         for provider in bcode_models::providers() {
             assert!(
@@ -2725,6 +3089,32 @@ mod tests {
         assert!(
             !text.contains("Login with"),
             "must not offer to log in to a bcode account that does not exist:\n{text}"
+        );
+        assert!(
+            text.contains("Sign in to a provider"),
+            "expected the first-run title:\n{text}"
+        );
+        assert!(
+            text.contains("Quit"),
+            "first-run must offer a clickable Quit row:\n{text}"
+        );
+        assert!(
+            text.contains("enter") && text.contains("ctrl+q") || text.contains("q"),
+            "expected shortcut hints:\n{text}"
+        );
+        assert!(
+            text.contains('⣷') || text.contains('⣿'),
+            "expected the existing bcode mark on a tall buffer:\n{text}"
+        );
+        assert_eq!(
+            result.menu_rects.len(),
+            bcode_models::providers().len() + 1,
+            "one hit rect per provider plus Quit"
+        );
+        assert_eq!(
+            result.provider_tab_rects.len(),
+            2,
+            "Providers and Accounts tabs must be hit-testable"
         );
     }
 

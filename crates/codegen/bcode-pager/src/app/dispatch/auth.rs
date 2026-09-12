@@ -502,6 +502,24 @@ pub(super) fn dispatch_provider_manager_oauth_login(provider_id: String) -> Vec<
     }]
 }
 
+pub(super) fn dispatch_provider_manager_cancel_oauth(app: &mut AppView) -> Vec<Effect> {
+    if let Some(handle) = app.provider_oauth_abort.take() {
+        handle.abort();
+    }
+    app.provider_oauth_code_tx = None;
+    vec![]
+}
+
+pub(super) fn dispatch_provider_manager_submit_oauth_code(
+    app: &mut AppView,
+    code: String,
+) -> Vec<Effect> {
+    if let Some(tx) = &app.provider_oauth_code_tx {
+        let _ = tx.try_send(code);
+    }
+    vec![]
+}
+
 /// A provider OAuth sign-in finished: reload the manager's statuses and, for
 /// an auth-gated manager with a now-usable credential, finish authentication.
 pub(super) fn handle_provider_oauth_login_done(
@@ -510,6 +528,8 @@ pub(super) fn handle_provider_oauth_login_done(
     result: Result<(), String>,
 ) -> Vec<Effect> {
     let home = bcode_dirs::bcode_home();
+    app.provider_oauth_code_tx = None;
+    app.provider_oauth_abort = None;
     let Some(state) = app.provider_setup.as_mut() else {
         return vec![];
     };
