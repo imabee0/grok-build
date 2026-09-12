@@ -67,6 +67,7 @@ fn auth_with_mode(mode: crate::auth::AuthMode, key: &str) -> crate::auth::BcodeA
         expires_at: None,
         oidc_issuer: None,
         oidc_client_id: None,
+        chatgpt_account_id: None,
     }
 }
 #[test]

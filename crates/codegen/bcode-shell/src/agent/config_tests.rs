@@ -1121,6 +1121,7 @@ fn sampling_config_uses_fallback_when_no_model_api_key() {
             base_url: model.info().base_url.clone(),
             auth_type: bcode_chat_state::AuthType::ApiKey,
             auth_scheme: AuthScheme::Bearer,
+            extra_headers: Default::default(),
         },
         None,
         None,
@@ -1485,6 +1486,7 @@ fn api_key_creds(base_url: &str) -> ResolvedCredentials {
         base_url: base_url.to_string(),
         auth_type: bcode_chat_state::AuthType::ApiKey,
         auth_scheme: Default::default(),
+        extra_headers: Default::default(),
     }
 }
 /// `disable_api_key_auth` kill switch (Claude `forceLoginMethod` parity).

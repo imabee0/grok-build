@@ -700,7 +700,19 @@ async fn run_provider_chatgpt_login(
         .id_token
         .as_deref()
         .ok_or_else(|| anyhow::Error::new(OidcError::MissingIdToken))?;
-    let minted = super::chatgpt::obtain_api_key(auth, id_token).await;
+    let account_id = super::chatgpt::chatgpt_account_id_from_token(id_token)
+        .or_else(|| super::chatgpt::chatgpt_account_id_from_token(&tokens.access_token));
+    let organization_id = super::chatgpt::chatgpt_organization_id_from_token(id_token);
+    // Token-exchange for `openai-api-key` needs an API organization on the
+    // id_token. A ChatGPT Plus login often has none; those credentials are
+    // the access token, used against the ChatGPT Codex backend.
+    let minted = if organization_id.is_some() {
+        super::chatgpt::obtain_api_key(auth, id_token).await
+    } else {
+        Err(anyhow::anyhow!(
+            "id_token has no organization_id; using ChatGPT subscription route"
+        ))
+    };
     let api_key = chatgpt_stored_key(minted, tokens.access_token.clone());
 
     let mut auth_record = build_bcode_auth(
@@ -710,6 +722,8 @@ async fn run_provider_chatgpt_login(
         &auth.client_id,
     );
     auth_record.key = api_key;
+    auth_record.chatgpt_account_id = account_id;
+    auth_record.organization_id = organization_id;
     // The minted key has no observable expiry; fall back to TOKEN_TTL.
     auth_record.expires_at = None;
     crate::auth::accounts::store_provider_oauth(

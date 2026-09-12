@@ -108,11 +108,17 @@ impl ProviderOAuthRef {
     /// pre-turn via [`Self::ensure_fresh_token`]. `None` for no credential, a
     /// non-OAuth credential, or one due for refresh (skew-checked).
     pub(crate) fn cached_token(&self, bcode_home: &Path) -> Option<String> {
+        self.cached_auth(bcode_home).map(|auth| auth.key)
+    }
+
+    /// Same as [`Self::cached_token`], but keeps the full record so the
+    /// credential seam can pick the ChatGPT Codex host for a subscription JWT.
+    pub(crate) fn cached_auth(&self, bcode_home: &Path) -> Option<BcodeAuth> {
         let auth = self.stored(bcode_home)?;
         if is_expired_with_buffer(&auth, expiry_skew()) {
             return None;
         }
-        Some(auth.key)
+        Some(auth)
     }
 
     /// The token that should replace `current_key` on the wire: serves the
