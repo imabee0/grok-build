@@ -354,9 +354,17 @@ name = "Mixtral 8x7B"
 env_key = "TOGETHER_API_KEY"
 ```
 
+### llama.cpp
+
+`llama-server` is a catalog provider. Start it (`llama-server -m model.gguf -c 8192 --port 8080`), then pick **llama.cpp** on first-open. No API key is required unless you launched the server with `--api-key`.
+
+bcode reads the running context window from `GET /props` (`default_generation_settings.n_ctx`) and the loaded id from `GET /v1/models`. It does **not** use `n_ctx_train` (the GGUF training window is often far larger than `-c`). Small windows compact earlier and use the concise tool-description pack so the harness still fits.
+
+Override the detected window with `[model.llamacpp] context_window = …` if you disagree. A different listen address is `[model.llamacpp] base_url = "http://127.0.0.1:PORT/v1"`.
+
 ### Local OpenAI-Compatible Server
 
-Any server that implements the OpenAI Chat Completions or Responses API:
+Any other server that implements the OpenAI Chat Completions or Responses API:
 
 ```toml
 [model.local-llama]

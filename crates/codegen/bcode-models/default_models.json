@@ -11,8 +11,9 @@
     "key in your shell, under the provider's usual variable name, just works.",
     "context_window is the window bcode will USE, which is not always the window",
     "the provider offers. DeepSeek v4 accepts 1M tokens; we cap at 500k because",
-    "quality degrades well before the limit. Raise it per model with",
-    "[model.<id>].context_window if you disagree.",
+    "quality degrades well before the limit. llama.cpp rows start at 8192 and",
+    "are replaced at session start by GET /props n_ctx (never n_ctx_train).",
+    "Raise it per model with [model.<id>].context_window if you disagree.",
     "",
     "",
     "Model ids, context windows and output limits are taken from each provider's",
@@ -83,6 +84,15 @@
       "env_key": "XAI_API_KEY",
       "default_model": "grok-4.6",
       "api_key_url": "https://console.x.ai"
+    },
+    {
+      "id": "llamacpp",
+      "name": "llama.cpp",
+      "base_url": "http://127.0.0.1:8080/v1",
+      "env_key": "LLAMA_API_KEY",
+      "default_model": "llamacpp",
+      "api_key_url": "https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md",
+      "probe": "llamacpp"
     }
   ],
   "default": "deepseek-v4-pro",
@@ -241,6 +251,23 @@
         }
       ],
       "auto_compact_threshold_percent": 85,
+      "compaction_at_tokens": true,
+      "compactions_remaining": 1
+    },
+    {
+      "id": "llamacpp",
+      "model": "llamacpp",
+      "model_family": "llamacpp",
+      "name": "llama.cpp",
+      "description": "Local llama-server; model id and n_ctx are read from the server",
+      "base_url": "http://127.0.0.1:8080/v1",
+      "env_key": "LLAMA_API_KEY",
+      "api_backend": "chat_completions",
+      "context_window": 8192,
+      "system_prompt_label": "bcode",
+      "supports_reasoning_effort": false,
+      "use_concise": true,
+      "auto_compact_threshold_percent": 60,
       "compaction_at_tokens": true,
       "compactions_remaining": 1
     }

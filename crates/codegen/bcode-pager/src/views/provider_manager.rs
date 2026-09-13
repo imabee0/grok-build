@@ -465,6 +465,22 @@ impl ProviderManagerState {
                 let Some(target) = target else {
                     return ProviderManagerOutcome::Unchanged;
                 };
+                // Local llama-server: no key required. Probe /health+/models
+                // via the usual store+verify path with the sentinel "none".
+                if self.tab == ProviderTab::Providers
+                    && self.selected_provider().is_some_and(|p| {
+                        p.info.probe == bcode_models::ProviderProbe::Llamacpp
+                            && !p.source.is_usable()
+                    })
+                {
+                    self.mode = ProviderMode::Verifying {
+                        target: target.clone(),
+                    };
+                    return ProviderManagerOutcome::StoreKey {
+                        target,
+                        key: bcode_shell::auth::llamacpp::OPTIONAL_KEY.to_string(),
+                    };
+                }
                 // A provider with its own OAuth app signs in via the browser,
                 // not a pasted key.
                 if self.tab == ProviderTab::Providers
@@ -780,6 +796,9 @@ fn provider_row_status(row: &ProviderStatus) -> String {
                     "sign in or API key".to_string()
                 }
             }
+        }
+        CredentialSource::None if row.info.probe == bcode_models::ProviderProbe::Llamacpp => {
+            "local server".to_string()
         }
         CredentialSource::None => "paste a key".to_string(),
     }
@@ -1444,6 +1463,30 @@ mod tests {
             s.handle_key(&key(KeyCode::Char('q'))),
             ProviderManagerOutcome::Quit
         );
+    }
+
+    #[test]
+    fn enter_on_llamacpp_without_a_key_stores_the_optional_sentinel() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut s = ProviderManagerState::first_run(dir.path());
+        let Some(idx) = s
+            .providers
+            .iter()
+            .position(|p| p.info.probe == bcode_models::ProviderProbe::Llamacpp)
+        else {
+            panic!("catalog must include a llama.cpp probe row");
+        };
+        s.selected = idx;
+        let id = s.providers[idx].info.id.clone();
+        let outcome = s.handle_key(&key(KeyCode::Enter));
+        assert_eq!(
+            outcome,
+            ProviderManagerOutcome::StoreKey {
+                target: KeyTarget::Provider(id),
+                key: bcode_shell::auth::llamacpp::OPTIONAL_KEY.to_string(),
+            }
+        );
+        assert!(matches!(s.mode, ProviderMode::Verifying { .. }));
     }
 
     #[test]

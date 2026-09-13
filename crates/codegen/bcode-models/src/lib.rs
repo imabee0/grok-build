@@ -56,6 +56,20 @@ pub struct ProviderInfo {
     /// publishes real issuer/client-id values.
     #[serde(default)]
     pub auth: Option<ProviderAuth>,
+    /// How to discover the live model id and context window. `None` is a
+    /// static catalog row; `Llamacpp` probes the local OpenAI-compat server.
+    #[serde(default)]
+    pub probe: ProviderProbe,
+}
+
+/// Runtime discovery a catalog provider can run against its own server.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderProbe {
+    #[default]
+    None,
+    /// llama-server: `GET /health`, `GET /v1/models`, `GET /props` (`n_ctx`).
+    Llamacpp,
 }
 
 /// A provider's own OAuth2/OIDC app for subscription sign-in, independent of

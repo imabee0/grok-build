@@ -2065,6 +2065,7 @@ impl MvpAgent {
             deployment_id,
             user_id,
         );
+        crate::agent::config::apply_llamacpp_probe(model, &mut config, &self.cfg.borrow());
         config.origin_client = origin_client;
         config
     }
