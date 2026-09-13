@@ -3860,6 +3860,8 @@ struct DefaultModelJson {
     /// Environment variable(s) holding this provider's API key.
     #[serde(default)]
     env_key: Option<EnvKeys>,
+    #[serde(default)]
+    use_concise: bool,
 }
 fn default_models(endpoints: &EndpointsConfig) -> IndexMap<String, ModelEntryConfig> {
     let root: serde_json::Value = serde_json::from_str(crate::models::DEFAULT_MODELS_JSON)
@@ -3921,7 +3923,7 @@ fn default_models(endpoints: &EndpointsConfig) -> IndexMap<String, ModelEntryCon
                 api_key: None,
                 env_key: m.env_key.clone(),
                 extra_headers: IndexMap::new(),
-                use_concise: false,
+                use_concise: m.use_concise,
                 hidden: m.hidden,
                 supported_in_api: m.supported_in_api,
                 reasoning_effort: m.reasoning_effort,
@@ -5383,6 +5385,41 @@ pub(crate) fn response_include_extensions(
         Vec::new()
     }
 }
+pub(crate) fn apply_llamacpp_probe(
+    model: &ModelEntry,
+    config: &mut bcode_sampler::SamplerConfig,
+    cfg: &Config,
+) {
+    let Some(family) = model.info().model_family.as_deref() else {
+        return;
+    };
+    let Some(provider) = bcode_models::provider(family) else {
+        return;
+    };
+    if provider.probe != bcode_models::ProviderProbe::Llamacpp {
+        return;
+    }
+    let catalog_key = model.info().id.as_deref().unwrap_or(family);
+    let user_pinned = cfg
+        .config_models
+        .get(catalog_key)
+        .and_then(|m| m.context_window)
+        .is_some();
+    let Some(probe) =
+        crate::auth::llamacpp::cached_probe(&config.base_url, config.api_key.as_deref())
+    else {
+        return;
+    };
+    crate::auth::llamacpp::apply_probe(
+        &mut config.context_window,
+        &mut config.max_completion_tokens,
+        &mut config.model,
+        family,
+        user_pinned,
+        &probe,
+    );
+}
+
 pub(crate) fn sampling_config_for_model(
     model: &ModelEntry,
     credentials: ResolvedCredentials,

@@ -12,6 +12,7 @@ pub mod error;
 mod external_auth;
 mod flow;
 mod jwt;
+pub mod llamacpp;
 pub(crate) mod manager;
 mod model;
 pub mod oidc;

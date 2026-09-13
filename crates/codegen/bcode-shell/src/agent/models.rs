@@ -1067,7 +1067,7 @@ impl ModelsManager {
         let credentials =
             resolve_credentials(current_model, session_auth.as_ref().map(|a| a.key.as_str()));
 
-        sampling_config_for_model(
+        let mut sampling = sampling_config_for_model(
             current_model,
             credentials,
             config.endpoints.alpha_test_key.clone(),
@@ -1076,7 +1076,9 @@ impl ModelsManager {
                 config.endpoints.deployment_key.as_deref(),
             ),
             None,
-        )
+        );
+        crate::agent::config::apply_llamacpp_probe(current_model, &mut sampling, &config);
+        sampling
     }
 
     fn cache_origin(&self) -> String {
